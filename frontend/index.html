@@ -3,12 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Exhibit Visitor UI</title>
+    <title>Drive a train</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <h1>Machines in Motion - Control Panel</h1>
-    <div id="status">Connecting...</div>
+    <header>
+        <h1>Drive a train</h1>
+        <p id="status" class="status">Connecting…</p>
+    </header>
+
+    <main id="panel" hidden>
+        <section>
+            <h2>Choose your train</h2>
+            <div id="locos" class="row"></div>
+            <p id="where" class="where"></p>
+        </section>
+
+        <section>
+            <h2>Speed</h2>
+            <div id="speeds" class="row"></div>
+            <button id="stop" class="stop">Stop train</button>
+        </section>
+
+        <section>
+            <h2>Direction</h2>
+            <div class="row">
+                <button data-dir="forward" class="dir">Forward</button>
+                <button data-dir="reverse" class="dir">Reverse</button>
+            </div>
+            <p class="hint">Changing direction stops the train first.</p>
+        </section>
+
+        <section id="switchSection">
+            <h2>Track switches</h2>
+            <div id="switches" class="row"></div>
+            <p class="hint">Tap a switch to send trains the other way.</p>
+        </section>
+    </main>
+
+    <div id="toast" role="status"></div>
+    <button id="estop" class="estop">Emergency stop</button>
 
     <script src="/static/app.js"></script>
 </body>
