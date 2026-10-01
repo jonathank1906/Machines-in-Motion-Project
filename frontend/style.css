@@ -5,7 +5,7 @@
 }
 *, *::before, *::after { box-sizing: inherit; }
 html { font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--ink); }
-body { margin: 0 auto; max-width: 30rem; padding: 1rem 1rem 6.5rem; }
+body { margin: 0 auto; max-width: 72rem; padding: 1rem 1rem 6.5rem; }
 h1 { margin: 0; font-size: 1.9rem; font-weight: 800; }
 h2 { margin: 0 0 .6rem; font-size: 1rem; font-weight: 700; color: var(--muted); }
 section { background: var(--card); border: 1px solid var(--line); border-radius: 1rem; padding: 1rem; margin-top: 1rem; }
@@ -40,3 +40,39 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 }
 #toast.show { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { #toast { transition: none; } button:active { transform: none; } }
+
+/* ---- layout: controls left, map right on desktop ---- */
+.layout { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+.mapbox { margin-top: 1rem; }
+.mapbox h2 { margin-bottom: .2rem; }
+.mapbox .hint { margin: 0 0 .6rem; }
+#map { width: 100%; height: auto; display: block; }
+@media (min-width: 60rem) {
+    .layout { grid-template-columns: 24rem 1fr; align-items: start; }
+    .mapbox { position: sticky; top: 1rem; }
+    /* pin the emergency stop under the left column instead of covering it */
+    .estop { left: max(1rem, calc((100vw - 72rem) / 2 + 1rem)); right: auto; width: 24rem; max-width: none; margin: 0; }
+}
+
+/* ---- map drawing ---- */
+.rail { fill: none; stroke: #c3cdd9; stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; }
+.station { fill: #fff; stroke: var(--ink); stroke-width: 3; }
+.station.busy { fill: #fff6c2; }
+.slabel { font-size: 15px; font-weight: 700; fill: var(--ink); }
+.signal { stroke: var(--ink); stroke-width: 2; }
+.signal.go { fill: #2fb457; }
+.signal.stop { fill: var(--red); }
+.signal.none { fill: #c3cdd9; }
+.swspot { cursor: pointer; }
+.swspot circle { fill: #fff; stroke: var(--ink); stroke-width: 3; }
+.swspot.diverging circle { fill: var(--yellow); }
+.swspot:focus-visible circle { stroke: var(--blue); stroke-width: 5; }
+.swspot:hover circle { stroke: var(--blue); }
+.swid { font-size: 14px; font-weight: 800; text-anchor: middle; fill: var(--ink); }
+.swstate { font-size: 12px; font-weight: 600; text-anchor: middle; fill: var(--muted); paint-order: stroke; stroke: var(--card); stroke-width: 4px; }
+.train { cursor: pointer; }
+.train rect { fill: var(--yellow); stroke: var(--ink); stroke-width: 2; }
+.train.sel rect { fill: var(--blue); stroke: var(--blue); }
+.train text { font-size: 14px; font-weight: 800; text-anchor: middle; fill: var(--ink); pointer-events: none; }
+.train.sel text { fill: #fff; }
+#map.offline { opacity: .35; }

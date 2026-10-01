@@ -13,37 +13,48 @@
     </header>
 
     <main id="panel" hidden>
-        <section>
-            <h2>Choose your train</h2>
-            <div id="locos" class="row"></div>
-            <p id="where" class="where"></p>
-        </section>
+        <div class="layout">
+            <div class="controls">
+                <section>
+                    <h2>Choose your train</h2>
+                    <div id="locos" class="row"></div>
+                    <p id="where" class="where"></p>
+                </section>
 
-        <section>
-            <h2>Speed</h2>
-            <div id="speeds" class="row"></div>
-            <button id="stop" class="stop">Stop train</button>
-        </section>
+                <section>
+                    <h2>Speed</h2>
+                    <div id="speeds" class="row"></div>
+                    <button id="stop" class="stop">Stop train</button>
+                </section>
 
-        <section>
-            <h2>Direction</h2>
-            <div class="row">
-                <button data-dir="forward" class="dir">Forward</button>
-                <button data-dir="reverse" class="dir">Reverse</button>
+                <section>
+                    <h2>Direction</h2>
+                    <div class="row">
+                        <button data-dir="forward" class="dir">Forward</button>
+                        <button data-dir="reverse" class="dir">Reverse</button>
+                    </div>
+                    <p class="hint">Changing direction stops the train first.</p>
+                </section>
+
+                <section id="switchSection">
+                    <h2>Track switches</h2>
+                    <div id="switches" class="row"></div>
+                    <p class="hint">Tap a switch to send trains the other way.</p>
+                </section>
             </div>
-            <p class="hint">Changing direction stops the train first.</p>
-        </section>
 
-        <section id="switchSection">
-            <h2>Track switches</h2>
-            <div id="switches" class="row"></div>
-            <p class="hint">Tap a switch to send trains the other way.</p>
-        </section>
+            <section class="mapbox">
+                <h2>Track map</h2>
+                <p class="hint">Tap a train to pick it. Tap a switch to flip it.</p>
+                <svg id="map" role="img" aria-label="Track map"></svg>
+            </section>
+        </div>
     </main>
 
     <div id="toast" role="status"></div>
     <button id="estop" class="estop">Emergency stop</button>
 
+    <script src="/static/map.js"></script>
     <script src="/static/app.js"></script>
 </body>
 </html>

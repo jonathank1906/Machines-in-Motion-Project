@@ -64,6 +64,12 @@ function build() {
         sw.append(b);
     });
     $("#switchSection").hidden = cfg.switches.length === 0;
+
+    TrackMap.build($("#map"), cfg, {
+        onSwitch: id => act(() => api(`/api/switch/${id}/flip`, "POST")),
+        onPick: id => { selected = id; render(); },
+    });
+
     $("#panel").hidden = false;
 }
 
@@ -97,7 +103,7 @@ function render() {
         b.classList.toggle("on", !!loco && loco.direction === b.dataset.dir));
 
     $("#where").textContent = loco
-        ? (speed > 0 ? "Moving" : "Stopped") + (loco.block ? ` · at block ${loco.block}` : "")
+        ? (speed > 0 ? "Moving" : "Stopped") + (loco.block ? ` · at ${TrackMap.labelFor(loco.block)}` : "")
         : "";
 
     document.querySelectorAll("#switches button").forEach(b => {
@@ -105,6 +111,8 @@ function render() {
         const label = sw ? (sw.state === "straight" ? "straight" : sw.state === "turnout" ? "diverging" : "unknown") : "";
         b.textContent = `Switch ${b.dataset.id}` + (label ? ` (${label})` : "");
     });
+
+    TrackMap.update(st, selected);
 }
 
 let polling = false;
