@@ -1,8 +1,9 @@
 const $ = s => document.querySelector(s);
-const STEPS = [{ label: "Slow", f: 1 / 3 }, { label: "Medium", f: 2 / 3 }, { label: "Fast", f: 1 }];
 const POLL_MS = 400;
 
 let cfg = null, selected = null, lastState = null, toastTimer = null;
+let speedTimeout = null;
+let sliderLockUntil = 0; // NEW: Replaces isDragging with a timestamp lock
 
 async function api(path, method = "GET") {
     const r = await fetch(path, { method });
@@ -27,8 +28,6 @@ async function act(fn) {
     poll(true);
 }
 
-const speedFor = f => Math.max(1, Math.round(cfg.max_speed * f));
-
 function btn(text, cls, onclick) {
     const b = document.createElement("button");
     b.textContent = text;
@@ -46,13 +45,31 @@ function build() {
     });
     selected = cfg.locos[0] || null;
 
-    STEPS.forEach(s => {
-        const b = btn(s.label, "step", () => act(() => api(`/api/loco/${selected}/speed/${speedFor(s.f)}`, "POST")));
-        b.dataset.speed = speedFor(s.f);
-        $("#speeds").append(b);
-    });
+    const speedSlider = $("#speedSlider");
+    const speedValue = $("#speedValue");
+
+    if (speedSlider && speedValue) {
+        // input fires continuously while you drag
+        speedSlider.addEventListener('input', (e) => {
+            speedValue.textContent = e.target.value;
+            sliderLockUntil = Date.now() + 2000; // Lock for 2 seconds
+        });
+
+        // change fires when you release the slider or click away
+        speedSlider.addEventListener('change', (e) => {
+            if (!selected) return;
+            const speed = e.target.value;
+            sliderLockUntil = Date.now() + 2000; // Refresh the 2 second lock
+            
+            if (speedTimeout) clearTimeout(speedTimeout);
+            speedTimeout = setTimeout(() => {
+                act(() => api(`/api/loco/${selected}/speed/${speed}`, "POST"));
+            }, 50);
+        });
+    }
 
     $("#stop").onclick = () => act(() => api(`/api/loco/${selected}/stop`, "POST"));
+    
     document.querySelectorAll(".dir").forEach(b => {
         b.onclick = () => act(() => api(`/api/loco/${selected}/direction/${b.dataset.dir}`, "POST"));
     });
@@ -91,14 +108,26 @@ function render() {
     else setStatus("Connected. Pick a speed to start.", "ok");
 
     const canDrive = online && !powerOff && !!loco;
-    document.querySelectorAll("#speeds button, #stop, .dir").forEach(b => b.disabled = !canDrive);
+    
+    document.querySelectorAll("#stop, .dir").forEach(b => b.disabled = !canDrive);
     document.querySelectorAll("#switches button").forEach(b => b.disabled = !online || powerOff);
     $("#estop").disabled = !st;
+    
+    const speedSlider = $("#speedSlider");
+    if (speedSlider) {
+        speedSlider.disabled = !canDrive;
+        const currentSpeed = loco ? loco.speed : 0;
+        
+        // Only update the slider if the 2-second lock has expired
+        if (Date.now() > sliderLockUntil) {
+            speedSlider.value = currentSpeed;
+            $("#speedValue").textContent = currentSpeed;
+        }
+    }
 
     document.querySelectorAll(".pick").forEach(b => b.classList.toggle("on", b.dataset.id === selected));
+    
     const speed = loco ? loco.speed : 0;
-    document.querySelectorAll(".step").forEach(b =>
-        b.classList.toggle("on", speed > 0 && Math.abs(speed - Number(b.dataset.speed)) <= 1));
     document.querySelectorAll(".dir").forEach(b =>
         b.classList.toggle("on", !!loco && loco.direction === b.dataset.dir));
 

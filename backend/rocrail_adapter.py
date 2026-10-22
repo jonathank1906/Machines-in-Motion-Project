@@ -254,14 +254,18 @@ class RocrailAdapter(CommandsMixin):
                 await asyncio.sleep(2)
 
     async def _request_state(self):
+        # NEW: Register client to disable "alien" mode and receive live broadcasts
+        await self._send_on_listener('<client name="ExhibitUI"/>', name="client")
+        
         await self._send_on_listener('<model cmd="lclist"/>')
         if self.sync_switches:
             await self._send_on_listener('<model cmd="swlist"/>')
             self._swlist_sent = True
 
-    async def _send_on_listener(self, body):
+    # MODIFIED: Added name parameter to dynamically set the <xmlh> tag name
+    async def _send_on_listener(self, body, name="model"):
         payload = body.encode("utf-8")
-        header = f'<xmlh><xml size="{len(payload)}" name="model"/></xmlh>'.encode("utf-8")
+        header = f'<xmlh><xml size="{len(payload)}" name="{name}"/></xmlh>'.encode("utf-8")
         self.writer.write(header + payload)
         await self.writer.drain()
 

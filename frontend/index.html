@@ -23,8 +23,11 @@
 
                 <section>
                     <h2>Speed</h2>
-                    <div id="speeds" class="row"></div>
-                    <button id="stop" class="stop">Stop train</button>
+                    <div class="row" style="align-items: center; gap: 10px;">
+                        <input type="range" id="speedSlider" min="0" max="100" value="0" style="flex-grow: 1;">
+                        <span id="speedValue" style="font-weight: bold; min-width: 3ch;">0</span>
+                    </div>
+                    <button id="stop" class="stop" style="margin-top: 10px;">Stop train</button>
                 </section>
 
                 <section>
