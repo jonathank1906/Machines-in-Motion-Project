@@ -7,8 +7,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Slider } from "@/components/ui/slider"
@@ -19,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   AlertTriangle,
   ArrowLeft,
@@ -29,6 +29,7 @@ import {
   Sun,
   Train,
   Split,
+  WifiOff,
 } from "lucide-react"
 
 /* ---------- theme ---------- */
@@ -56,6 +57,68 @@ function useTheme() {
   return { theme, toggle }
 }
 
+/* ---------- connection status ---------- */
+
+const STATUS = {
+  online: { label: "Connected", dot: "bg-emerald-500", ping: true },
+  connecting: { label: "Connecting…", dot: "bg-amber-500", ping: true },
+  offline: { label: "Offline", dot: "bg-red-500", ping: false },
+}
+
+function ConnectionStatus({ status }) {
+  const { label, dot, ping } = STATUS[status]
+  return (
+    <Badge
+      variant="outline"
+      role="status"
+      className="gap-2 rounded-full px-3 py-1 text-sm font-medium"
+    >
+      <span className="relative flex h-2 w-2">
+        {ping && (
+          <span
+            className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${dot}`}
+          />
+        )}
+        <span className={`relative inline-flex h-2 w-2 rounded-full ${dot}`} />
+      </span>
+      {label}
+    </Badge>
+  )
+}
+
+/* ---------- picker: plain label for one option, dropdown for several ---------- */
+
+function Picker({ id, value, onChange, options, placeholder, disabled, format = (v) => v }) {
+  if (options.length <= 1) {
+    return (
+      <div
+        id={id}
+        className={`flex h-9 w-full items-center rounded-md border bg-muted/50 px-3 text-sm ${disabled ? "opacity-50" : ""}`}
+      >
+        {options.length ? (
+          format(options[0])
+        ) : (
+          <span className="text-muted-foreground">None available</span>
+        )}
+      </div>
+    )
+  }
+  return (
+    <Select value={value} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger id={id} className="w-full">
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((opt) => (
+          <SelectItem key={opt} value={opt}>
+            {format(opt)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
 /* ---------- app ---------- */
 
 export default function App() {
@@ -66,6 +129,8 @@ export default function App() {
   const [selectedLoco, setSelectedLoco] = useState("")
   const [selectedSwitch, setSelectedSwitch] = useState("")
   const [localSpeed, setLocalSpeed] = useState(0)
+  const [failures, setFailures] = useState(0)
+  const [hasConnected, setHasConnected] = useState(false)
 
   const debounceTimer = useRef(null)
   const lastSendTime = useRef(0)
@@ -90,15 +155,35 @@ export default function App() {
   useEffect(() => {
     const interval = setInterval(() => {
       fetch("/api/state")
-        .then((res) => res.json())
-        .then((data) => setLiveState(data))
-        .catch((err) => console.error("Polling error:", err))
+        .then((res) => {
+          if (!res.ok) throw new Error(`State request failed (${res.status})`)
+          return res.json()
+        })
+        .then((data) => {
+          setLiveState(data)
+          setFailures(0)
+          setHasConnected(true)
+        })
+        .catch((err) => {
+          console.error("Polling error:", err)
+          setFailures((f) => f + 1)
+        })
     }, 1000)
     return () => clearInterval(interval)
   }, [])
 
   // Clear any pending speed command on unmount
   useEffect(() => () => clearTimeout(debounceTimer.current), [])
+
+  // Offline = the API stopped answering twice in a row, or the backend
+  // reports that it lost Rocrail (state.status === "offline")
+  const status =
+    failures >= 2 || liveState.status === "offline"
+      ? "offline"
+      : hasConnected
+        ? "online"
+        : "connecting"
+  const offline = status === "offline"
 
   const activeLoco = liveState.locomotives?.[selectedLoco] || {
     speed: 0,
@@ -113,9 +198,10 @@ export default function App() {
   }, [activeLoco.speed, selectedLoco])
 
   const post = (path) =>
-    fetch(path, { method: "POST" }).catch((err) =>
+    fetch(path, { method: "POST" }).catch((err) => {
       console.error("Request error:", err)
-    )
+      setFailures((f) => Math.max(f, 2)) // command didn't reach the server
+    })
 
   const handleSpeedChange = ([speed]) => {
     setLocalSpeed(speed)
@@ -171,9 +257,10 @@ export default function App() {
       {/* Header */}
       <header className="border-b">
         <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-6">
-          <div className="flex items-center gap-2.5">
-            <Train className="h-5 w-5" />
-            <h1 className="text-lg font-semibold tracking-tight">
+          <div className="flex items-center gap-4">
+            <ConnectionStatus status={status} />
+            <Separator orientation="vertical" className="hidden h-5 sm:block" />
+            <h1 className="hidden text-lg font-semibold tracking-tight sm:block">
               Rail Exhibit Control
             </h1>
           </div>
@@ -193,17 +280,29 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-4xl space-y-6 p-6">
+        {offline && (
+          <Alert variant="destructive">
+            <WifiOff />
+            <AlertTitle>Connection lost</AlertTitle>
+            <AlertDescription>
+              Train and switch controls are paused until the connection
+              returns.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Emergency stop */}
         <Button
-          variant="destructive"
           onClick={emergencyStop}
-          className="h-20 w-full gap-3 text-xl font-bold"
+          className="h-14 w-full gap-2.5 rounded-xl border border-red-900 bg-red-600 text-lg font-bold text-white shadow-[0_4px_0_0_#7f1d1d] transition-[transform,box-shadow] hover:bg-red-700 active:translate-y-1 active:shadow-none dark:border-red-950 dark:bg-red-600 dark:hover:bg-red-700"
         >
-          <AlertTriangle className="h-7 w-7" />
+          <AlertTriangle className="h-5 w-5" />
           Emergency stop all trains
         </Button>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div
+          className={`grid grid-cols-1 gap-6 transition-opacity md:grid-cols-2 ${offline ? "opacity-60" : ""}`}
+        >
           {/* Train control */}
           <Card className="flex flex-col border bg-card text-card-foreground shadow-sm">
             <CardHeader>
@@ -219,18 +318,14 @@ export default function App() {
             <CardContent className="flex flex-1 flex-col gap-6">
               <div className="space-y-2">
                 <Label htmlFor="loco-select">Active train</Label>
-                <Select value={selectedLoco} onValueChange={setSelectedLoco}>
-                  <SelectTrigger id="loco-select" className="w-full">
-                    <SelectValue placeholder="Select a train…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allowed.locos.map((id) => (
-                      <SelectItem key={id} value={id}>
-                        {id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Picker
+                  id="loco-select"
+                  value={selectedLoco}
+                  onChange={setSelectedLoco}
+                  options={allowed.locos}
+                  placeholder="Select a train…"
+                  disabled={offline}
+                />
               </div>
 
               <Separator />
@@ -247,7 +342,7 @@ export default function App() {
                       max={100}
                       step={1}
                       onValueChange={handleSpeedChange}
-                      disabled={!selectedLoco}
+                      disabled={!selectedLoco || offline}
                       className="h-full"
                       aria-label="Throttle"
                     />
@@ -264,30 +359,28 @@ export default function App() {
                         %
                       </span>
                     </p>
-                    <Badge variant="secondary" className="mt-3 capitalize">
-                      {activeLoco.direction}
-                    </Badge>
                   </div>
 
                   <div className="space-y-2">
                     <Label>Direction</Label>
-                    <ToggleGroup
-                      type="single"
-                      variant="outline"
-                      value={activeLoco.direction}
-                      onValueChange={setDirection}
-                      disabled={!selectedLoco}
-                      className="w-full"
-                    >
-                      <ToggleGroupItem value="reverse" className="flex-1 gap-1.5">
-                        <ArrowLeft className="h-4 w-4" />
-                        Reverse
-                      </ToggleGroupItem>
-                      <ToggleGroupItem value="forward" className="flex-1 gap-1.5">
-                        <ArrowRight className="h-4 w-4" />
-                        Forward
-                      </ToggleGroupItem>
-                    </ToggleGroup>
+                    <div className="flex w-full gap-2">
+                      {[
+                        { dir: "reverse", label: "Reverse", Icon: ArrowLeft },
+                        { dir: "forward", label: "Forward", Icon: ArrowRight },
+                      ].map(({ dir, label, Icon }) => (
+                        <Button
+                          key={dir}
+                          variant={activeLoco.direction === dir ? "default" : "outline"}
+                          className="flex-1 gap-1.5"
+                          aria-pressed={activeLoco.direction === dir}
+                          disabled={!selectedLoco || offline}
+                          onClick={() => setDirection(dir)}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {label}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -298,7 +391,7 @@ export default function App() {
                 variant="secondary"
                 className="w-full gap-2"
                 onClick={stopLoco}
-                disabled={!selectedLoco}
+                disabled={!selectedLoco || offline}
               >
                 <OctagonX className="h-4 w-4" />
                 Halt train
@@ -321,18 +414,15 @@ export default function App() {
             <CardContent className="flex flex-1 flex-col gap-6">
               <div className="space-y-2">
                 <Label htmlFor="switch-select">Target switch</Label>
-                <Select value={selectedSwitch} onValueChange={setSelectedSwitch}>
-                  <SelectTrigger id="switch-select" className="w-full">
-                    <SelectValue placeholder="Select a switch…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allowed.switches.map((id) => (
-                      <SelectItem key={id} value={id}>
-                        Switch: {id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Picker
+                  id="switch-select"
+                  value={selectedSwitch}
+                  onChange={setSelectedSwitch}
+                  options={allowed.switches}
+                  placeholder="Select a switch…"
+                  disabled={offline}
+                  format={(id) => `Switch: ${id}`}
+                />
               </div>
 
               <div className="rounded-lg border bg-muted/50 p-4 text-sm text-muted-foreground">
@@ -348,7 +438,7 @@ export default function App() {
               <Button
                 className="w-full"
                 onClick={flipSwitch}
-                disabled={!selectedSwitch}
+                disabled={!selectedSwitch || offline}
               >
                 Flip switch
               </Button>
