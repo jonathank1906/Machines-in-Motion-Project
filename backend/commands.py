@@ -43,3 +43,19 @@ class CommandsMixin:
         if position not in ("flip", "straight", "turnout"):
             raise ValueError("position must be flip, straight or turnout")
         await self.send_command(f'<sw id={quoteattr(sw_id)} cmd="{position}"/>', "sw")
+
+    async def set_light(self, loco_id, light_on):
+        self._check_loco(loco_id)
+        light_str = "true" if light_on else "false"
+        
+        # Fetch current speed and direction from state so the train doesn't jerk/stop
+        current_state = self.state["locomotives"].get(loco_id, {})
+        v = current_state.get("speed", 0)
+        d = "true" if current_state.get("direction", "forward") == "forward" else "false"
+        
+        # Send a full velocity command with the 'fn' attribute (F0/lights) included.
+        # This guarantees Rocrail broadcasts the full XML packet to Mosquitto.
+        await self.send_command(
+            f'<lc id={quoteattr(loco_id)} cmd="velocity" V="{v}" dir="{d}" fn="{light_str}"/>', 
+            "lc"
+        )

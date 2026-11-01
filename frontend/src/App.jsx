@@ -30,6 +30,7 @@ import {
   Train,
   Split,
   WifiOff,
+  Lightbulb,
 } from "lucide-react"
 
 /* ---------- theme ---------- */
@@ -129,6 +130,7 @@ export default function App() {
   const [selectedLoco, setSelectedLoco] = useState("")
   const [selectedSwitch, setSelectedSwitch] = useState("")
   const [localSpeed, setLocalSpeed] = useState(0)
+  const [lightOn, setLightOn] = useState(false)
   const [failures, setFailures] = useState(0)
   const [hasConnected, setHasConnected] = useState(false)
 
@@ -240,6 +242,13 @@ export default function App() {
   const setDirection = (dir) => {
     if (!selectedLoco || !dir) return
     post(`/api/loco/${selectedLoco}/direction/${dir}`)
+  }
+
+  const toggleLight = () => {
+    if (!selectedLoco || offline) return
+    const newState = !lightOn
+    setLightOn(newState)
+    post(`/api/loco/${selectedLoco}/light/${newState}`)
   }
 
   const stopLoco = () => {
@@ -391,6 +400,18 @@ export default function App() {
                         </Button>
                       ))}
                     </div>
+                      <div className="space-y-2 mt-4">
+                      <Label>Headlights</Label>
+                      <Button
+                        variant={lightOn ? "default" : "outline"}
+                        className="w-full gap-2"
+                        disabled={!selectedLoco || offline}
+                        onClick={toggleLight}
+                      >
+                        <Lightbulb className="h-4 w-4" />
+                        {lightOn ? "Lights On" : "Lights Off"}
+                      </Button>
+                  </div>
                   </div>
                 </div>
               </div>

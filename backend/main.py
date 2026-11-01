@@ -91,3 +91,10 @@ async def estop():
 async def throw_switch(sw_id: str, position: str = "flip"):
     await _do(adapter.throw_switch(sw_id, position))
     return {"status": "success", "switch": sw_id, "position": position}
+
+@app.post("/api/loco/{loco_id}/light/{state}")
+async def set_light(loco_id: str, state: str):
+    if state not in ("true", "false"):
+        raise HTTPException(400, "light state must be true or false")
+    await _do(adapter.set_light(loco_id, state == "true"))
+    return {"status": "success", "loco_id": loco_id, "light_on": state == "true"}
