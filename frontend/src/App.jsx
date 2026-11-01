@@ -135,7 +135,6 @@ export default function App() {
   const debounceTimer = useRef(null)
   const lastSendTime = useRef(0)
   const syncLock = useRef(false)
-  const activeRequest = useRef(null)
 
   // Load which locomotives and switches this panel may control
   useEffect(() => {
@@ -218,39 +217,24 @@ export default function App() {
     syncLock.current = true
 
     const now = Date.now()
-    
-    // Throttled live updates with AbortController to prevent network traffic jams
-    if (now - lastSendTime.current > 100) {
-      lastSendTime.current = now
-      
-      if (activeRequest.current) {
-        activeRequest.current.abort() // Cancel the previous request if it hasn't finished
-      }
-      activeRequest.current = new AbortController()
 
-      if (selectedLoco) {
-        fetch(`/api/loco/${selectedLoco}/speed/${speed}`, {
-          method: "POST",
-          signal: activeRequest.current.signal
-        }).catch(err => {
-          if (err.name !== 'AbortError') console.error("Request error:", err)
-        })
-      }
+    // Send exactly one request every 150ms while dragging.
+    // This keeps the train moving in real-time without suffocating your backend.
+    if (now - lastSendTime.current >= 150) {
+      lastSendTime.current = now
+      fetch(`/api/loco/${selectedLoco}/speed/${speed}`, { method: "POST" })
+        .catch(err => console.error("Request error:", err))
     }
 
-    // Final guaranteed value once the user pauses
+    // When you completely stop dragging, guarantee the final value is sent
     clearTimeout(debounceTimer.current)
     debounceTimer.current = setTimeout(() => {
-      if (selectedLoco) {
-        if (activeRequest.current) activeRequest.current.abort()
-        
-        post(`/api/loco/${selectedLoco}/speed/${speed}`).finally(() =>
-          setTimeout(() => {
-            syncLock.current = false
-          }, 1200)
-        )
-      }
-    }, 150)
+      post(`/api/loco/${selectedLoco}/speed/${speed}`).finally(() => {
+        setTimeout(() => {
+          syncLock.current = false
+        }, 1200)
+      })
+    }, 150) // Triggers 150ms after your finger stops moving
   }
 
   const setDirection = (dir) => {

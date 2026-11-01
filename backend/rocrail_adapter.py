@@ -284,16 +284,15 @@ class RocrailAdapter(CommandsMixin):
             buf = self._process(buf + data)
             if len(buf) > 5_000_000:
                 buf = b""
-
-    # ---------- commands: short-lived separate connection ----------
+                
+    # ---------- commands: sent over the persistent connection ----------
     async def send_command(self, body, name):
-        payload = body.encode("utf-8")
-        header = f'<xmlh><xml size="{len(payload)}" name="{name}"/></xmlh>'.encode("utf-8")
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(self.host, self.port), timeout=3)
-        writer.write(header + payload)
-        await writer.drain()
-        asyncio.create_task(self._linger_and_close(reader, writer))
+        if not self.connected or not self.writer:
+            self._log("Cannot send command: not connected to Rocrail")
+            return
+            
+        # Send the command instantly over the existing open socket
+        await self._send_on_listener(body, name=name)
 
     @staticmethod
     async def _linger_and_close(reader, writer, seconds=1.5):
