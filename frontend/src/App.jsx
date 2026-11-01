@@ -135,6 +135,7 @@ export default function App() {
   const debounceTimer = useRef(null)
   const lastSendTime = useRef(0)
   const syncLock = useRef(false)
+  const activeRequest = useRef(null)
 
   // Load which locomotives and switches this panel may control
   useEffect(() => {
@@ -191,9 +192,18 @@ export default function App() {
   }
 
   // Follow the server's speed unless the user is mid-drag
+  // Follow the server's speed unless the user is mid-drag or the difference is just a rounding error
   useEffect(() => {
     if (activeLoco.speed !== undefined && !syncLock.current) {
-      setLocalSpeed(activeLoco.speed)
+      setLocalSpeed((prevSpeed) => {
+        // If the server speed is within 2% of our slider, it's just Rocrail rounding.
+        // Keep the slider where the user left it to prevent visual jumping.
+        if (Math.abs(activeLoco.speed - prevSpeed) <= 2) {
+          return prevSpeed
+        }
+        // Otherwise, a real change happened (e.g., an Emergency Stop), so update the slider.
+        return activeLoco.speed
+      })
     }
   }, [activeLoco.speed, selectedLoco])
 
@@ -207,21 +217,37 @@ export default function App() {
     setLocalSpeed(speed)
     syncLock.current = true
 
-    // Throttled live updates while dragging
     const now = Date.now()
+    
+    // Throttled live updates with AbortController to prevent network traffic jams
     if (now - lastSendTime.current > 100) {
       lastSendTime.current = now
-      if (selectedLoco) post(`/api/loco/${selectedLoco}/speed/${speed}`)
+      
+      if (activeRequest.current) {
+        activeRequest.current.abort() // Cancel the previous request if it hasn't finished
+      }
+      activeRequest.current = new AbortController()
+
+      if (selectedLoco) {
+        fetch(`/api/loco/${selectedLoco}/speed/${speed}`, {
+          method: "POST",
+          signal: activeRequest.current.signal
+        }).catch(err => {
+          if (err.name !== 'AbortError') console.error("Request error:", err)
+        })
+      }
     }
 
-    // Final value once the user pauses
+    // Final guaranteed value once the user pauses
     clearTimeout(debounceTimer.current)
     debounceTimer.current = setTimeout(() => {
       if (selectedLoco) {
+        if (activeRequest.current) activeRequest.current.abort()
+        
         post(`/api/loco/${selectedLoco}/speed/${speed}`).finally(() =>
           setTimeout(() => {
             syncLock.current = false
-          }, 500)
+          }, 1200)
         )
       }
     }, 150)
@@ -339,7 +365,7 @@ export default function App() {
                       id="throttle"
                       orientation="vertical"
                       value={[localSpeed]}
-                      max={100}
+                      max={60}
                       step={1}
                       onValueChange={handleSpeedChange}
                       disabled={!selectedLoco || offline}
