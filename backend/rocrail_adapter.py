@@ -38,6 +38,7 @@ class RocrailAdapter(CommandsMixin):
         self.sync_switches = sync_switches
         self._connected_at = 0.0
         self._swlist_sent = False
+        self._command_lock = asyncio.Lock()
 
         base = os.path.join(os.path.dirname(__file__), '..')
         self.plan_file = os.path.join(base, 'plan.xml')
@@ -291,8 +292,8 @@ class RocrailAdapter(CommandsMixin):
             self._log("Cannot send command: not connected to Rocrail")
             return
             
-        # Send the command instantly over the existing open socket
-        await self._send_on_listener(body, name=name)
+        async with self._command_lock:
+            await self._send_on_listener(body, name=name)
 
     @staticmethod
     async def _linger_and_close(reader, writer, seconds=1.5):
@@ -321,12 +322,4 @@ class RocrailAdapter(CommandsMixin):
             self.writer.close()
 
     def get_state(self):
-        # Force reported speed to 0 if the loco is safety-locked
-        locked_locos = getattr(self.__class__, '_zero_locked_locos', set())
-        
-        if locked_locos and "locomotives" in self.state:
-            for loco_id in locked_locos:
-                if loco_id in self.state["locomotives"]:
-                    self.state["locomotives"][loco_id]["speed"] = 0
-
         return self.state

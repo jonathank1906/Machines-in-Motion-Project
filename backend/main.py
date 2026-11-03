@@ -1,10 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from contextlib import asynccontextmanager
 import os
 
 from backend.rocrail_adapter import RocrailAdapter
+from backend.commands import EStopActive
 from backend.plan_parser import parse_plan
 from backend import config
 
@@ -31,7 +32,7 @@ async def serve_index():
 
 @app.get("/api/state")
 async def get_state():
-    return adapter.get_state()
+    return {**adapter.get_state(), "estop": adapter.estop_active}
 
 
 @app.get("/api/layout")
@@ -47,6 +48,8 @@ async def get_allowed():
 
 
 def _guard(exc):
+    if isinstance(exc, EStopActive):
+        return exc
     if isinstance(exc, PermissionError):
         return HTTPException(403, str(exc))
     if isinstance(exc, ValueError):
@@ -57,8 +60,15 @@ def _guard(exc):
 async def _do(coro):
     try:
         return await coro
+    except EStopActive:
+        raise
     except Exception as e:
         raise _guard(e)
+
+
+@app.exception_handler(EStopActive)
+async def estop_active_handler(request, exc):
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
 @app.post("/api/loco/{loco_id}/speed/{speed}")
@@ -85,6 +95,12 @@ async def stop_loco(loco_id: str):
 async def estop():
     await _do(adapter.emergency_stop_all())
     return {"status": "success", "action": "emergency_stop"}
+
+
+@app.post("/api/estop/reset")
+async def estop_reset():
+    await adapter.reset_estop()
+    return {"ok": True}
 
 
 @app.post("/api/switch/{sw_id}/{position}")

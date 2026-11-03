@@ -133,11 +133,16 @@ export default function App() {
   const [lightOn, setLightOn] = useState(false)
   const [failures, setFailures] = useState(0)
   const [hasConnected, setHasConnected] = useState(false)
+  const locoRef = useRef("")
+  locoRef.current = selectedLoco
+  const estop = !!liveState.estop
 
-  const debounceTimer = useRef(null)
-  const lastSendTime = useRef(0)
+  const releaseTimer = useRef(null)   // releases syncLock after the user stops dragging
   const syncLock = useRef(false)
-  const ignoreStateUntil = useRef(0);
+  const desiredSpeed = useRef(0)      // what the slider wants right now
+  const pendingSend = useRef(false)   // "there is a newer value that has not been sent"
+  const inFlight = useRef(false)      // only ONE speed request at a time
+  const lastSendAt = useRef(0)
 
   // Load which locomotives and switches this panel may control
   useEffect(() => {
@@ -175,8 +180,7 @@ export default function App() {
     return () => clearInterval(interval)
   }, [])
 
-  // Clear any pending speed command on unmount
-  useEffect(() => () => clearTimeout(debounceTimer.current), [])
+  useEffect(() => () => clearTimeout(releaseTimer.current), [])
 
   // Offline = the API stopped answering twice in a row, or the backend
   // reports that it lost Rocrail (state.status === "offline")
@@ -209,73 +213,93 @@ export default function App() {
     }
   }, [activeLoco.speed, selectedLoco])
 
-  const post = (path) => {
-    // THE FIREWALL: Silently drop delayed ghost speed commands during E-Stop cooldown.
-    // This stops React's debouncer from tricking the backend.
-    if (Date.now() < ignoreStateUntil.current && path.includes("/speed/")) {
-      console.log("Firewall blocked ghost command:", path);
-      return Promise.resolve();
-    }
-
-    return fetch(path, { method: "POST" }).catch((err) => {
+  const post = (path) =>
+    fetch(path, { method: "POST" }).catch((err) => {
       console.error("Request error:", err)
       setFailures((f) => Math.max(f, 2))
     })
+
+  const pumpSpeed = async () => {
+    if (inFlight.current) return
+    inFlight.current = true
+    const retrySoon = () => {
+      pendingSend.current = true
+      setTimeout(pumpSpeed, 300)
+    }
+    try {
+      while (pendingSend.current) {
+        const wait = 100 - (Date.now() - lastSendAt.current)
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+        pendingSend.current = false
+        const speed = desiredSpeed.current
+        lastSendAt.current = Date.now()
+        const res = await fetch(`/api/loco/${locoRef.current}/speed/${speed}`, { method: "POST" })
+        if (res.status === 409) {
+          desiredSpeed.current = 0
+          setLocalSpeed(0)
+          break
+        }
+        if (!res.ok) {
+          if (res.status >= 500) retrySoon()
+          break
+        }
+      }
+    } catch (err) {
+      console.error("Request error:", err)
+      setFailures((f) => Math.max(f, 2))
+      retrySoon()
+    } finally {
+      inFlight.current = false
+    }
   }
 
   const handleSpeedChange = ([speed]) => {
     setLocalSpeed(speed)
     syncLock.current = true
+    desiredSpeed.current = speed
+    pendingSend.current = true
+    pumpSpeed()
+    clearTimeout(releaseTimer.current)
+    releaseTimer.current = setTimeout(() => { syncLock.current = false }, 1200)
+  }
 
-    const now = Date.now()
-
-    // Send exactly one request every 150ms while dragging.
-    // This keeps the train moving in real-time without suffocating your backend.
-    if (now - lastSendTime.current >= 150) {
-      lastSendTime.current = now
-      fetch(`/api/loco/${selectedLoco}/speed/${speed}`, { method: "POST" })
-        .catch(err => console.error("Request error:", err))
-    }
-
-    // When you completely stop dragging, guarantee the final value is sent
-    clearTimeout(debounceTimer.current)
-    debounceTimer.current = setTimeout(() => {
-      post(`/api/loco/${selectedLoco}/speed/${speed}`).finally(() => {
-        setTimeout(() => {
-          syncLock.current = false
-        }, 1200)
-      })
-    }, 150) // Triggers 150ms after your finger stops moving
+  const whenIdle = async (fn) => {
+    while (inFlight.current) await new Promise((r) => setTimeout(r, 20))
+    fn()
   }
 
   const setDirection = (dir) => {
     if (!selectedLoco || !dir) return
-    post(`/api/loco/${selectedLoco}/direction/${dir}`)
+    pendingSend.current = false
+    desiredSpeed.current = 0
+    whenIdle(() => post(`/api/loco/${selectedLoco}/direction/${dir}`))
   }
 
   const toggleLight = () => {
     if (!selectedLoco || offline) return
     const newState = !lightOn
     setLightOn(newState)
-    post(`/api/loco/${selectedLoco}/light/${newState}`)
+    whenIdle(() => post(`/api/loco/${selectedLoco}/light/${newState}`))
   }
 
   const stopLoco = () => {
     if (!selectedLoco) return
-    post(`/api/loco/${selectedLoco}/stop`)
     setLocalSpeed(0)
+    desiredSpeed.current = 0
+    pendingSend.current = true
+    pumpSpeed()
   }
 
   const emergencyStop = () => {
-    // 1. Arm the network firewall for 3 seconds
-    ignoreStateUntil.current = Date.now() + 3000;
-    
-    // 2. Fire the hardware stop
-    post("/api/estop");
-    
-    // 3. Reset the slider visually
-    setLocalSpeed(0);
+    pendingSend.current = false
+    desiredSpeed.current = 0
+    clearTimeout(releaseTimer.current)
+    syncLock.current = false
+    setLocalSpeed(0)
+    post("/api/estop")
   }
+
+  const resetEstop = () => post("/api/estop/reset")
 
   const flipSwitch = () => {
     if (!selectedSwitch) return
@@ -318,6 +342,16 @@ export default function App() {
             <AlertDescription>
               Train and switch controls are paused until the connection
               returns.
+            </AlertDescription>
+          </Alert>
+        )}
+        {estop && (
+          <Alert variant="destructive">
+            <AlertTriangle />
+            <AlertTitle>Emergency stop active</AlertTitle>
+            <AlertDescription className="flex items-center justify-between gap-4">
+              All trains are stopped and locked.
+              <Button size="sm" onClick={resetEstop}>Reset and drive</Button>
             </AlertDescription>
           </Alert>
         )}
@@ -373,7 +407,7 @@ export default function App() {
                       max={60}
                       step={1}
                       onValueChange={handleSpeedChange}
-                      disabled={!selectedLoco || offline}
+                      disabled={!selectedLoco || offline || estop}
                       className="h-full"
                       aria-label="Throttle"
                     />
