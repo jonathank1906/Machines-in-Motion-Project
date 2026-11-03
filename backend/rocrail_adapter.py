@@ -321,4 +321,12 @@ class RocrailAdapter(CommandsMixin):
             self.writer.close()
 
     def get_state(self):
+        # Force reported speed to 0 if the loco is safety-locked
+        locked_locos = getattr(self.__class__, '_zero_locked_locos', set())
+        
+        if locked_locos and "locomotives" in self.state:
+            for loco_id in locked_locos:
+                if loco_id in self.state["locomotives"]:
+                    self.state["locomotives"][loco_id]["speed"] = 0
+
         return self.state

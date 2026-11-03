@@ -137,6 +137,7 @@ export default function App() {
   const debounceTimer = useRef(null)
   const lastSendTime = useRef(0)
   const syncLock = useRef(false)
+  const ignoreStateUntil = useRef(0);
 
   // Load which locomotives and switches this panel may control
   useEffect(() => {
@@ -208,11 +209,19 @@ export default function App() {
     }
   }, [activeLoco.speed, selectedLoco])
 
-  const post = (path) =>
-    fetch(path, { method: "POST" }).catch((err) => {
+  const post = (path) => {
+    // THE FIREWALL: Silently drop delayed ghost speed commands during E-Stop cooldown.
+    // This stops React's debouncer from tricking the backend.
+    if (Date.now() < ignoreStateUntil.current && path.includes("/speed/")) {
+      console.log("Firewall blocked ghost command:", path);
+      return Promise.resolve();
+    }
+
+    return fetch(path, { method: "POST" }).catch((err) => {
       console.error("Request error:", err)
-      setFailures((f) => Math.max(f, 2)) // command didn't reach the server
+      setFailures((f) => Math.max(f, 2))
     })
+  }
 
   const handleSpeedChange = ([speed]) => {
     setLocalSpeed(speed)
@@ -258,11 +267,14 @@ export default function App() {
   }
 
   const emergencyStop = () => {
-    // Cancel any queued speed command so it can't override the stop
-    clearTimeout(debounceTimer.current)
-    syncLock.current = false
-    post("/api/estop")
-    setLocalSpeed(0)
+    // 1. Arm the network firewall for 3 seconds
+    ignoreStateUntil.current = Date.now() + 3000;
+    
+    // 2. Fire the hardware stop
+    post("/api/estop");
+    
+    // 3. Reset the slider visually
+    setLocalSpeed(0);
   }
 
   const flipSwitch = () => {
