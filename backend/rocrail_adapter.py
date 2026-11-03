@@ -81,7 +81,14 @@ class RocrailAdapter(CommandsMixin):
             self._log(f"could not load plan.xml: {e}")
 
     # ---------- state updates ----------
+    # ---------- state updates ----------
     def _apply_lc(self, attrs, source="live"):
+        # THE IRON CURTAIN: Cover our ears! 
+        # Ignore Rocrail's stale speed broadcasts for 2 seconds after an E-stop.
+        # This guarantees FastAPI's memory stays at 0 and prevents the React UI from bouncing.
+        if source == "live" and time.time() < getattr(self.__class__, '_estop_lockout_until', 0):
+            return
+
         loc_id = attrs.get("id")
         if not loc_id:
             return
@@ -321,4 +328,14 @@ class RocrailAdapter(CommandsMixin):
             self.writer.close()
 
     def get_state(self):
+        # ROOT-LEVEL ZERO LOCK: Intercept state requests before they leave the adapter.
+        # If a locomotive is zero-locked by an E-stop, force its reported speed to 0 
+        # so the frontend never sees Rocrail's cached speed of 30.
+        locked_locos = getattr(self.__class__, '_zero_locked_locos', set())
+        
+        if locked_locos and "locomotives" in self.state:
+            for loco_id in locked_locos:
+                if loco_id in self.state["locomotives"]:
+                    self.state["locomotives"][loco_id]["speed"] = 0
+
         return self.state

@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 import os
 
 from backend.rocrail_adapter import RocrailAdapter
+from backend.commands import CommandsMixin
 from backend.plan_parser import parse_plan
 from backend import config
 
@@ -31,7 +32,11 @@ async def serve_index():
 
 @app.get("/api/state")
 async def get_state():
-    return adapter.get_state()
+    state_data = adapter.get_state()
+    for loco_id in CommandsMixin._zero_locked_locos:
+        if loco_id in state_data["locomotives"]:
+            state_data["locomotives"][loco_id]["speed"] = 0
+    return state_data
 
 
 @app.get("/api/layout")

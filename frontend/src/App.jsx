@@ -137,6 +137,10 @@ export default function App() {
   const debounceTimer = useRef(null)
   const lastSendTime = useRef(0)
   const syncLock = useRef(false)
+  const ignoreStateUntil = useRef(0)
+  const isDragging = useRef(false)
+  const isServerSync = useRef(false);
+  const isEStopping = useRef(false);
 
   // Load which locomotives and switches this panel may control
   useEffect(() => {
@@ -154,6 +158,7 @@ export default function App() {
   }, [])
 
   // Poll live state every second
+  // Poll live state every second
   useEffect(() => {
     const interval = setInterval(() => {
       fetch("/api/state")
@@ -162,6 +167,14 @@ export default function App() {
           return res.json()
         })
         .then((data) => {
+          // Instead of ignoring the state completely, let's force the loco speed 
+          // to 0 in the incoming data if we are in the lockout window!
+          if (Date.now() < ignoreStateUntil.current && data.locomotives) {
+            Object.keys(data.locomotives).forEach(locId => {
+              data.locomotives[locId].speed = 0;
+            });
+          }
+          
           setLiveState(data)
           setFailures(0)
           setHasConnected(true)
@@ -196,47 +209,30 @@ export default function App() {
   // Follow the server's speed unless the user is mid-drag or the difference is just a rounding error
   useEffect(() => {
     if (activeLoco.speed !== undefined && !syncLock.current) {
+      isServerSync.current = true; // Mark this as a server-driven update
       setLocalSpeed((prevSpeed) => {
-        // If the server speed is within 2% of our slider, it's just Rocrail rounding.
-        // Keep the slider where the user left it to prevent visual jumping.
         if (Math.abs(activeLoco.speed - prevSpeed) <= 2) {
-          return prevSpeed
+          return prevSpeed;
         }
-        // Otherwise, a real change happened (e.g., an Emergency Stop), so update the slider.
-        return activeLoco.speed
-      })
+        return activeLoco.speed;
+      });
+      // Reset the flag after the render cycle completes
+      setTimeout(() => { isServerSync.current = false; }, 50);
     }
-  }, [activeLoco.speed, selectedLoco])
+  }, [activeLoco.speed, selectedLoco]);
 
-  const post = (path) =>
-    fetch(path, { method: "POST" }).catch((err) => {
+  const post = (path) => {
+    // THE ULTIMATE NETWORK INTERCEPTOR:
+    // If we are E-stopping or locked out, completely block any outbound speed changes.
+    if ((isEStopping.current || Date.now() < ignoreStateUntil.current) && path.includes("/speed/")) {
+      console.log("FIREWALL INTERCEPTED GHOST COMMAND:", path);
+      return Promise.resolve(); // Silently swallow the request
+    }
+
+    return fetch(path, { method: "POST" }).catch((err) => {
       console.error("Request error:", err)
       setFailures((f) => Math.max(f, 2)) // command didn't reach the server
     })
-
-  const handleSpeedChange = ([speed]) => {
-    setLocalSpeed(speed)
-    syncLock.current = true
-
-    const now = Date.now()
-
-    // Send exactly one request every 150ms while dragging.
-    // This keeps the train moving in real-time without suffocating your backend.
-    if (now - lastSendTime.current >= 150) {
-      lastSendTime.current = now
-      fetch(`/api/loco/${selectedLoco}/speed/${speed}`, { method: "POST" })
-        .catch(err => console.error("Request error:", err))
-    }
-
-    // When you completely stop dragging, guarantee the final value is sent
-    clearTimeout(debounceTimer.current)
-    debounceTimer.current = setTimeout(() => {
-      post(`/api/loco/${selectedLoco}/speed/${speed}`).finally(() => {
-        setTimeout(() => {
-          syncLock.current = false
-        }, 1200)
-      })
-    }, 150) // Triggers 150ms after your finger stops moving
   }
 
   const setDirection = (dir) => {
@@ -257,14 +253,23 @@ export default function App() {
     setLocalSpeed(0)
   }
 
-  const emergencyStop = () => {
-    // Cancel any queued speed command so it can't override the stop
-    clearTimeout(debounceTimer.current)
-    syncLock.current = false
-    post("/api/estop")
-    setLocalSpeed(0)
-  }
+ const emergencyStop = () => {
+    // 1. SLAM THE NUCLEAR SHUTTER DOWN
+    isEStopping.current = true;
+    clearTimeout(debounceTimer.current);
+    
+    // 2. Fire the backend E-Stop
+    post("/api/estop");
+    
+    // 3. Move the slider visually without triggering events
+    setLocalSpeed(0);
 
+    // 4. Lift the shutter after 3 seconds
+    setTimeout(() => {
+      isEStopping.current = false;
+    }, 3000);
+  };
+    
   const flipSwitch = () => {
     if (!selectedSwitch) return
     post(`/api/switch/${selectedSwitch}/flip`)
@@ -354,17 +359,37 @@ export default function App() {
                 <div className="flex flex-col items-center gap-3">
                   <Label htmlFor="throttle">Throttle</Label>
                   <div className="flex h-64 justify-center">
-                    <Slider
-                      id="throttle"
-                      orientation="vertical"
-                      value={[localSpeed]}
-                      max={60}
-                      step={1}
-                      onValueChange={handleSpeedChange}
-                      disabled={!selectedLoco || offline}
-                      className="h-full"
-                      aria-label="Throttle"
-                    />
+                   <div 
+                      onPointerDownCapture={() => { isDragging.current = true; }}
+                      onPointerUpCapture={() => { 
+                        // Small delay ensures the commit finishes before the lock engages
+                        setTimeout(() => { isDragging.current = false; }, 100); 
+                      }}
+                    >
+                      <Slider
+                        id="throttle"
+                        orientation="vertical"
+                        value={[localSpeed]}
+                        max={60}
+                        step={1}
+                        onValueChange={(val) => setLocalSpeed(val[0])}
+                        onValueCommit={(val) => {
+                          // THE ULTIMATE SHIELD: If an E-stop was triggered, drop this packet instantly.
+                          if (isEStopping.current) {
+                            return;
+                          }
+
+                          if (isServerSync.current || !isDragging.current) {
+                            return;
+                          }
+                          
+                          post(`/api/loco/${selectedLoco}/speed/${val[0]}`);
+                        }}
+                        disabled={!selectedLoco || offline}
+                        className="h-full"
+                        aria-label="Throttle"
+                      />
+                    </div>
                   </div>
                 </div>
 

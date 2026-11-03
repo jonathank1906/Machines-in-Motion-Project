@@ -171,10 +171,28 @@ async def main():
             print(f"MQTT connected ({reason_code}); listening on {COMMAND_TOPIC}")
             c.subscribe(COMMAND_TOPIC)
 
+        def handle_mqtt_msg(payload, t_rx):
+            # Check if this incoming message is an Emergency Stop
+            is_sys_stop = '<sys ' in payload and ('cmd="stop"' in payload or 'cmd="ebreak"' in payload)
+            is_power_off = '<state ' in payload and 'power="false"' in payload and STOP_ON_POWER_OFF
+            
+            if is_sys_stop or is_power_off:
+                print(">> E-STOP DETECTED: Purging pending command queue!")
+                # Empty the entire queue instantly
+                while not queue.empty():
+                    queue.get_nowait()
+            
+            # Put the message in the queue (if we just purged it, this is now 1st in line)
+            queue.put_nowait(("msg", payload, t_rx))
+
         def on_message(c, userdata, msg):
+            # paho-mqtt runs in a background thread, so we safely pass the 
+            # parsing and queue-management back to the main asyncio loop
             loop.call_soon_threadsafe(
-                queue.put_nowait,
-                ("msg", msg.payload.decode(errors="replace"), time.perf_counter()))
+                handle_mqtt_msg,
+                msg.payload.decode(errors="replace"), 
+                time.perf_counter()
+            )
 
         def on_disconnect(c, userdata, flags, reason_code, properties=None):
             loop.call_soon_threadsafe(queue.put_nowait, ("mqtt_down",))
