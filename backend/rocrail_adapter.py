@@ -1,5 +1,4 @@
 import asyncio
-import os
 import re
 import socket
 import time
@@ -30,9 +29,6 @@ class RocrailAdapter(CommandsMixin):
         self._swlist_sent = False
         self._command_lock = asyncio.Lock()
 
-        base = os.path.join(os.path.dirname(__file__), '..')
-        self.plan_file = os.path.join(base, 'plan.xml')
-
         self.reader = None
         self.writer = None
         self.connected = False
@@ -49,26 +45,9 @@ class RocrailAdapter(CommandsMixin):
             "debug": {"bytes_received": 0, "frames": 0, "last_event": None,
                       "disconnects": 0, "last_disconnect": None},
         }
-        self.load_plan()
 
     def _log(self, msg):
         print(f"[rocrail] {msg}", flush=True)
-
-    def load_plan(self):
-        try:
-            root = ET.parse(self.plan_file).getroot()
-            for lc in root.iter('lc'):
-                self._apply_lc(dict(lc.attrib), "plan")
-            for sw in root.iter('sw'):
-                self._apply_sw(dict(sw.attrib), "plan")
-            for bk in root.iter('bk'):
-                self._apply_bk(dict(bk.attrib), "plan")
-            for sg in root.iter('sg'):
-                self._apply_sg(dict(sg.attrib), "plan")
-            self._log(f"loaded {len(self.state['locomotives'])} locos, {len(self.state['switches'])} switches, "
-                      f"{len(self.state['blocks'])} blocks, {len(self.state['signals'])} signals from plan.xml")
-        except Exception as e:
-            self._log(f"could not load plan.xml: {e}")
 
     def _apply_lc(self, attrs, source="live"):
         loc_id = attrs.get("id")

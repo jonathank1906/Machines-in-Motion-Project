@@ -7,11 +7,9 @@ import asyncio
 
 from backend.rocrail_adapter import RocrailAdapter
 from backend.commands import EStopActive
-from backend.plan_parser import parse_plan
 from backend import config
 
 adapter = RocrailAdapter()
-layout = parse_plan(adapter.plan_file) 
 
 
 async def heartbeat_loop():
@@ -50,11 +48,6 @@ async def serve_index():
 @app.get("/api/state")
 async def get_state():
     return {**adapter.get_state(), "estop": adapter.estop_active}
-
-
-@app.get("/api/layout")
-async def get_layout():
-    return layout
 
 
 @app.get("/api/allowed")
