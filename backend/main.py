@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from contextlib import asynccontextmanager
 import os
+import asyncio
 
 from backend.rocrail_adapter import RocrailAdapter
 from backend.commands import EStopActive
@@ -13,11 +14,28 @@ adapter = RocrailAdapter()
 layout = parse_plan(adapter.plan_file)   # static geometry, served once
 
 
+async def heartbeat_loop():
+    """Keep Rocrail-to-MQTT traffic alive while the backend is running."""
+    while True:
+        try:
+            await adapter.send_command('<clock cmd="get"/>', 'clock')
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            print(f"[heartbeat] Rocrail pulse failed: {exc}", flush=True)
+        await asyncio.sleep(2.0)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await adapter.connect()
-    yield
-    adapter.disconnect()
+    heartbeat_task = asyncio.create_task(heartbeat_loop())
+    try:
+        yield
+    finally:
+        heartbeat_task.cancel()
+        await asyncio.gather(heartbeat_task, return_exceptions=True)
+        adapter.disconnect()
 
 app = FastAPI(lifespan=lifespan)
 

@@ -184,10 +184,18 @@ async def main():
         mq.loop_start()
 
         try:
+            last_heartbeat = time.monotonic()
+
             while client.is_connected:
                 try:
+                    # Check the queue frequently enough to run the watchdog promptly.
                     item = await asyncio.wait_for(queue.get(), timeout=0.5)
+                    last_heartbeat = time.monotonic()
                 except asyncio.TimeoutError:
+                    if bridge.power != 0 and time.monotonic() - last_heartbeat > 5.0:
+                        print("!! WATCHDOG TIMEOUT: Upstream connection lost (Backend/Rocrail). "
+                              "Halting train.")
+                        await bridge.stop_motor()
                     continue
 
                 if item[0] == "mqtt_down":
