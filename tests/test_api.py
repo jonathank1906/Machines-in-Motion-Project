@@ -17,7 +17,6 @@ def test_environment(monkeypatch):
 
 @pytest.fixture
 def client():
-    """Provides a TestClient with all hardware/network calls mocked."""
     with patch("backend.main.adapter") as mock_adapter:
         mock_adapter.connect = AsyncMock()
         mock_adapter.disconnect = AsyncMock()
