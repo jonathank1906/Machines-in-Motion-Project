@@ -1,31 +1,11 @@
-"""Command seam between the API and Rocrail. Mix into RocrailAdapter:
-    class RocrailAdapter(CommandsMixin): ...
-All validation and the speed cap live here, so the browser is never trusted.
-
-Design rules (these replace the old time-window interlocks):
- 1. Every motion command for a loco runs under that loco's lock, and the safety
-    check happens INSIDE the lock, right before the send. Nothing can pass a
-    check and then reach Rocrail after an emergency stop.
- 2. The emergency stop is LATCHED until a human calls reset_estop(). While it is
-    latched, any speed above 0 is refused with EStopActive. No timers involved.
- 3. Stop commands (speed 0) are never suppressed, whatever the state.
- 4. Light and direction commands re-send the backend's own record of what it last
-    commanded (the "intent"), never the speed echoed back by Rocrail, so toggling
-    the light can never change the speed.
-"""
 import asyncio
 from xml.sax.saxutils import quoteattr
-
 from backend import config
-
 
 class EStopActive(Exception):
     """A move command was refused because the emergency stop is latched."""
 
-
 class CommandsMixin:
-    # ---- internal state, created lazily so the mixin needs no __init__ ----
-
     def _ctl(self):
         if not hasattr(self, "_ctl_state"):
             self._ctl_state = {"estop": False, "locks": {}, "intent": {}}
@@ -35,7 +15,6 @@ class CommandsMixin:
         return self._ctl()["locks"].setdefault(loco_id, asyncio.Lock())
 
     def _intent(self, loco_id):
-        # None = "never commanded by us", so we don't override what Rocrail has
         return self._ctl()["intent"].setdefault(
             loco_id, {"speed": 0, "forward": None, "light": None})
 
@@ -70,8 +49,6 @@ class CommandsMixin:
             locos[loco_id]["speed"] = 0
             locos[loco_id]["mode"] = "stop"
 
-    # ---- commands ----
-
     async def set_speed(self, loco_id, speed):
         self._check_loco(loco_id)
         speed = max(0, min(int(speed), config.MAX_SPEED))
@@ -87,7 +64,7 @@ class CommandsMixin:
         self._check_loco(loco_id)
         async with self._lock(loco_id):
             intent = self._intent(loco_id)
-            intent["speed"] = 0          # never reverse while moving
+            intent["speed"] = 0         
             intent["forward"] = bool(forward)
             await self._send_lc(loco_id, intent)
 
@@ -110,11 +87,11 @@ class CommandsMixin:
     async def emergency_stop_all(self):
         """Latch the stop first, then stop every allowed loco. Tries everything
         even if one send fails, and re-raises the first error afterwards."""
-        self._ctl()["estop"] = True      # from now on, any speed > 0 is refused
+        self._ctl()["estop"] = True     
         first_error = None
         for loco_id in sorted(config.ALLOWED_LOCOS):
             try:
-                async with self._lock(loco_id):   # waits for a command already being sent
+                async with self._lock(loco_id):  
                     intent = self._intent(loco_id)
                     intent["speed"] = 0
                     self._mirror_stop(loco_id)

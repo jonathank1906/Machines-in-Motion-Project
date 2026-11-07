@@ -11,11 +11,10 @@ from backend.plan_parser import parse_plan
 from backend import config
 
 adapter = RocrailAdapter()
-layout = parse_plan(adapter.plan_file)   # static geometry, served once
+layout = parse_plan(adapter.plan_file) 
 
 
 async def heartbeat_loop():
-    """Keep Rocrail-to-MQTT traffic alive while the backend is running."""
     while True:
         try:
             await adapter.send_command('<clock cmd="get"/>', 'clock')

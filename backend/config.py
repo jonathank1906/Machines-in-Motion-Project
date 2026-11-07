@@ -2,4 +2,4 @@
 Empty sets mean NOTHING is allowed (fail closed)."""
 ALLOWED_LOCOS = {"BR103", "NS2418", "60337"}
 ALLOWED_SWITCHES = {"sw1", "sw2"}
-MAX_SPEED = 60                       # percent cap, enforced server-side
+MAX_SPEED = 60

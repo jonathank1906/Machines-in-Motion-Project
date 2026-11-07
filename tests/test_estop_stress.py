@@ -13,7 +13,6 @@ print("Flooding queue...")
 flood_thread = threading.Thread(target=flood_speed)
 flood_thread.start()
 
-# Wait 0.5s so the queue is packed, then fire E-Stop
 time.sleep(0.5)
 t0 = time.time()
 requests.post(f"{BASE_URL}/estop")

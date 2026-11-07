@@ -1,21 +1,3 @@
-"""
-bridge.py: Rocrail (MQTT) -> LEGO Powered Up hub 88009 (Bluetooth LE)
-
-Rocrail stays the authority. This program only translates: it listens on
-Rocrail's MQTT command topic and turns loco commands into motor power for
-the hub. Your FastAPI backend does not change at all.
-
-Setup:
-    py -m pip install bleak paho-mqtt
-Before running:
-    - Mosquitto running, Rocrail's MQTT controller configured
-    - hub switched on (green button, LED blinking), LEGO app closed
-    - hub_test.py closed (a hub accepts only one connection)
-Run:
-    py bridge.py
-Stop with Ctrl+C (the train is stopped before exit).
-"""
-
 import asyncio
 import csv
 import os
@@ -27,30 +9,29 @@ from datetime import datetime
 import paho.mqtt.client as mqtt
 from bleak import BleakClient
 
-# ---------------- settings you can change ----------------
+
 BROKER_HOST = "localhost"
 BROKER_PORT = 1883
-COMMAND_TOPIC = "rocrail/service/command"   # Rocrail -> hardware (seen in your recording)
+COMMAND_TOPIC = "rocrail/service/command"   
 
-HUB_ADDRESS = "9C:9A:C0:4A:8B:B9"           # your hub, found by hub_test.py
-LOCO_ADDR = "1"                             # Rocrail loco address 1 = this hub
-MOTOR_PORT = 0x00                           # port A
-LIGHT_PORT = 0x01                           # port B (lights)
+HUB_ADDRESS = "9C:9A:C0:4A:8B:B9"           
+LOCO_ADDR = "1"                            
+MOTOR_PORT = 0x00                          
+LIGHT_PORT = 0x01                           
 
-MIN_POWER = 22        # lowest power that reliably moves the train (you measured 18-20)
-TOP_POWER = 40        # power at Rocrail speed 100%. Only raise after testing on curves!
-LIGHT_POWER = 40      # brightness used when F0 is on
-DIRECTION_SIGN = 1    # set to -1 if "forward" drives the train backwards
-REVERSE_PAUSE = 0.6   # seconds to wait at standstill when direction flips while moving
-STOP_ON_POWER_OFF = False   # see notes: turn on after checking what Rocrail sends
+MIN_POWER = 22        
+TOP_POWER = 40        
+LIGHT_POWER = 40      
+DIRECTION_SIGN = 1    
+REVERSE_PAUSE = 0.6   
+STOP_ON_POWER_OFF = False
 LOG_FILE = "latency_log.csv"
 
 HUB_CHAR_UUID = "00001624-1212-efde-1623-785feabcd123"
-# ---------------------------------------------------------
+
 
 
 def speed_to_power(v: float, v_max: float) -> int:
-    """Rocrail speed (0..V_max) -> motor power. 0 stays 0; anything above starts at MIN_POWER."""
     if v <= 0 or v_max <= 0:
         return 0
     fraction = min(v / v_max, 1.0)
@@ -58,7 +39,6 @@ def speed_to_power(v: float, v_max: float) -> int:
 
 
 def interpret(payload: str):
-    """Turn one Rocrail XML message into an action dict, or None to ignore it."""
     try:
         root = ET.fromstring(payload)
     except ET.ParseError:
@@ -83,7 +63,7 @@ def interpret(payload: str):
 
     if root.tag == "sys":
         cmd = root.get("cmd")
-        if cmd in ("stop", "ebreak"):          # assumption: Rocrail's stop buttons use these
+        if cmd in ("stop", "ebreak"):          
             return {"kind": "stop_all", "why": f"sys cmd={cmd}"}
         return {"kind": "note", "text": f"sys message: {payload[:120]}"}
 
@@ -92,14 +72,12 @@ def interpret(payload: str):
             return {"kind": "stop_all", "why": "power off"}
         return {"kind": "note", "text": f"state message: power={root.get('power')}"}
 
-    return None  # clock, boosterlist, fbinfo, other locos ... ignored
+    return None 
 
 
 class Bridge:
-    """Holds what we last told the hub, and applies changes safely."""
-
     def __init__(self, write):
-        self._write = write          # async function(port_id, power)
+        self._write = write          
         self.power = 0
         self.light = False
 
@@ -118,7 +96,6 @@ class Bridge:
             self.light = light
 
     async def stop_motor(self):
-        """Always sends the stop, even if we think the motor is already stopped."""
         await self._write(MOTOR_PORT, 0)
         self.power = 0
 
@@ -141,10 +118,9 @@ def log_latency(rx_to_write_ms: float, write_to_ack_ms: float, v, power):
 async def main():
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
-    last_cmd = {}   # timing of the most recent motor command, for the latency log
+    last_cmd = {}   
 
     def on_notify(_, data: bytearray):
-        # 0x82 = Port Output Command Feedback: the hub acknowledging a port command
         if len(data) >= 4 and data[2] == 0x82 and data[3] == MOTOR_PORT and last_cmd:
             ack_ms = (time.perf_counter() - last_cmd["t_done"]) * 1000
             log_latency(last_cmd["rx_to_write_ms"], ack_ms, last_cmd["v"], last_cmd["power"])
@@ -162,7 +138,7 @@ async def main():
             await client.write_gatt_char(HUB_CHAR_UUID, data, response=False)
 
         bridge = Bridge(write)
-        await bridge.stop_motor()    # start from a known state
+        await bridge.stop_motor()  
         print("Hub connected, motor stopped.")
 
         mq = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
@@ -188,7 +164,6 @@ async def main():
 
             while client.is_connected:
                 try:
-                    # Check the queue frequently enough to run the watchdog promptly.
                     item = await asyncio.wait_for(queue.get(), timeout=0.5)
                     last_heartbeat = time.monotonic()
                 except asyncio.TimeoutError:

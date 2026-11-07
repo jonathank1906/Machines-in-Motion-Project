@@ -1,31 +1,14 @@
-"""
-Step 1: talk to a LEGO Powered Up hub (88009 City Hub) over Bluetooth LE.
-No Rocrail, no MQTT. Just: find the hub, connect, listen, spin the motor.
-
-Setup:
-    pip install bleak
-Run:
-    python hub_test.py
-
-Commands once connected (type then press Enter):
-    a 20     run port A at +20% power
-    b -20    run port B at -20% power (reverse)
-    stop     stop both ports
-    quit     stop both ports and disconnect
-"""
-
 import asyncio
 import sys
 
 from bleak import BleakClient, BleakScanner
 
-# From LEGO's published Wireless Protocol 3.0
 HUB_SERVICE_UUID = "00001623-1212-efde-1623-785feabcd123"
 HUB_CHAR_UUID = "00001624-1212-efde-1623-785feabcd123"
 LEGO_COMPANY_ID = 0x0397
 
 PORTS = {"a": 0x00, "b": 0x01}
-MAX_POWER = 40  # safety cap for first tests; raise it later on purpose
+MAX_POWER = 40 
 
 
 def power_command(port_id: int, power: int) -> bytes:
@@ -37,7 +20,6 @@ def power_command(port_id: int, power: int) -> bytes:
 
 def on_notify(_, data: bytearray):
     print(f"[hub -> laptop] {data.hex(' ')}")
-    # Message type 0x04 = Hub Attached I/O: tells us what is plugged into which port
     if len(data) >= 5 and data[2] == 0x04:
         port = data[3]
         event = {0: "detached", 1: "attached", 2: "attached (virtual)"}.get(data[4], "?")
@@ -84,7 +66,7 @@ async def main():
     async with BleakClient(device, disconnected_callback=on_disconnect) as client:
         print("Connected. Listening for hub messages...")
         await client.start_notify(HUB_CHAR_UUID, on_notify)
-        await asyncio.sleep(2)  # let the 'attached I/O' messages arrive
+        await asyncio.sleep(2)  
         print(__doc__.split("Commands once connected")[1].split('"""')[0])
 
         loop = asyncio.get_running_loop()

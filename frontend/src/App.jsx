@@ -33,8 +33,6 @@ import {
   Lightbulb,
 } from "lucide-react"
 
-/* ---------- theme ---------- */
-
 function useTheme() {
   const [theme, setTheme] = useState(() => {
     try {
@@ -57,8 +55,6 @@ function useTheme() {
   const toggle = () => setTheme((t) => (t === "dark" ? "light" : "dark"))
   return { theme, toggle }
 }
-
-/* ---------- connection status ---------- */
 
 const STATUS = {
   online: { label: "Connected", dot: "bg-emerald-500", ping: true },
@@ -86,8 +82,6 @@ function ConnectionStatus({ status }) {
     </Badge>
   )
 }
-
-/* ---------- picker: plain label for one option, dropdown for several ---------- */
 
 function Picker({ id, value, onChange, options, placeholder, disabled, format = (v) => v }) {
   if (options.length <= 1) {
@@ -137,14 +131,13 @@ export default function App() {
   locoRef.current = selectedLoco
   const estop = !!liveState.estop
 
-  const releaseTimer = useRef(null)   // releases syncLock after the user stops dragging
+  const releaseTimer = useRef(null)   
   const syncLock = useRef(false)
-  const desiredSpeed = useRef(0)      // what the slider wants right now
-  const pendingSend = useRef(false)   // "there is a newer value that has not been sent"
-  const inFlight = useRef(false)      // only ONE speed request at a time
+  const desiredSpeed = useRef(0)     
+  const pendingSend = useRef(false)   
+  const inFlight = useRef(false)      
   const lastSendAt = useRef(0)
 
-  // Load which locomotives and switches this panel may control
   useEffect(() => {
     fetch("/api/allowed")
       .then((res) => res.json())
@@ -159,7 +152,6 @@ export default function App() {
       .catch((err) => console.error("Config fetch error:", err))
   }, [])
 
-  // Poll live state every second
   useEffect(() => {
     const interval = setInterval(() => {
       fetch("/api/state")
@@ -182,8 +174,6 @@ export default function App() {
 
   useEffect(() => () => clearTimeout(releaseTimer.current), [])
 
-  // Offline = the API stopped answering twice in a row, or the backend
-  // reports that it lost Rocrail (state.status === "offline")
   const status =
     failures >= 2 || liveState.status === "offline"
       ? "offline"
@@ -197,17 +187,12 @@ export default function App() {
     direction: "forward",
   }
 
-  // Follow the server's speed unless the user is mid-drag
-  // Follow the server's speed unless the user is mid-drag or the difference is just a rounding error
   useEffect(() => {
     if (activeLoco.speed !== undefined && !syncLock.current) {
       setLocalSpeed((prevSpeed) => {
-        // If the server speed is within 2% of our slider, it's just Rocrail rounding.
-        // Keep the slider where the user left it to prevent visual jumping.
         if (Math.abs(activeLoco.speed - prevSpeed) <= 2) {
           return prevSpeed
         }
-        // Otherwise, a real change happened (e.g., an Emergency Stop), so update the slider.
         return activeLoco.speed
       })
     }

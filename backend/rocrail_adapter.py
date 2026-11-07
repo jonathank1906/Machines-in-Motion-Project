@@ -19,16 +19,6 @@ ATTR_RE = re.compile(r'([\w:.-]+)="([^"]*)"')
 
 
 class RocrailAdapter(CommandsMixin):
-    """
-    Notes (learned from probing Rocrail):
-      * lc/sw/bk/sg/state events are broadcast to every connected client.
-      * Rocrail doesn't push state on connect, so we ask with <model cmd="lclist"/> (and swlist).
-      * NEVER request <model cmd="plan"/>: Rocrail drops us as an "alien" client.
-      * Block occupancy = the bk 'locid' attribute (bk 'state' is open/closed, not occupied).
-      * Each entry has "source": "plan" | "live".
-      * Commands go over short-lived separate connections so they can't disturb the listener.
-    """
-
     def __init__(self, host="127.0.0.1", port=8051, log_frames=False,
                  resync_interval=30, sync_switches=True):
         self.host = host
@@ -64,7 +54,6 @@ class RocrailAdapter(CommandsMixin):
     def _log(self, msg):
         print(f"[rocrail] {msg}", flush=True)
 
-    # ---------- initial state from plan.xml ----------
     def load_plan(self):
         try:
             root = ET.parse(self.plan_file).getroot()
@@ -81,7 +70,6 @@ class RocrailAdapter(CommandsMixin):
         except Exception as e:
             self._log(f"could not load plan.xml: {e}")
 
-    # ---------- state updates ----------
     def _apply_lc(self, attrs, source="live"):
         loc_id = attrs.get("id")
         if not loc_id:
@@ -148,7 +136,6 @@ class RocrailAdapter(CommandsMixin):
         if "power" in attrs:
             self.state["power"] = attrs["power"] == "true"
 
-    # ---------- frame handling ----------
     def _handle_frame(self, name, body):
         body = body.strip(WS)
         self.state["debug"]["frames"] += 1
@@ -213,7 +200,6 @@ class RocrailAdapter(CommandsMixin):
             return buf[m.start():]
         return b""
 
-    # ---------- listener connection (never sends state-changing commands) ----------
     async def connect(self):
         self._stopping = False
         if self._task is None:
@@ -255,7 +241,6 @@ class RocrailAdapter(CommandsMixin):
                 await asyncio.sleep(2)
 
     async def _request_state(self):
-        # NEW: Register client to disable "alien" mode and receive live broadcasts
         await self._send_on_listener('<client name="ExhibitUI"/>', name="client")
         
         await self._send_on_listener('<model cmd="lclist"/>')
@@ -263,7 +248,6 @@ class RocrailAdapter(CommandsMixin):
             await self._send_on_listener('<model cmd="swlist"/>')
             self._swlist_sent = True
 
-    # MODIFIED: Added name parameter to dynamically set the <xmlh> tag name
     async def _send_on_listener(self, body, name="model"):
         payload = body.encode("utf-8")
         header = f'<xmlh><xml size="{len(payload)}" name="{name}"/></xmlh>'.encode("utf-8")
@@ -286,7 +270,6 @@ class RocrailAdapter(CommandsMixin):
             if len(buf) > 5_000_000:
                 buf = b""
                 
-    # ---------- commands: sent over the persistent connection ----------
     async def send_command(self, body, name):
         if not self.connected or not self.writer:
             self._log("Cannot send command: not connected to Rocrail")

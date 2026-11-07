@@ -2,7 +2,6 @@
 @import "tw-animate-css";
 @import "@fontsource-variable/geist";
 
-/* Makes every dark: utility follow the .dark class */
 @custom-variant dark (&:is(.dark *));
 
 :root {
