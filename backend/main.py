@@ -17,7 +17,7 @@ layout = parse_plan(adapter.plan_file)   # static geometry, served once
 async def lifespan(app: FastAPI):
     await adapter.connect()
     yield
-    adapter.disconnect()
+    await adapter.disconnect()
 
 app = FastAPI(lifespan=lifespan)
 
