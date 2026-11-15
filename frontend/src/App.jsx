@@ -33,6 +33,8 @@ import {
   Lightbulb,
 } from "lucide-react"
 
+/* ---------- theme ---------- */
+
 function useTheme() {
   const [theme, setTheme] = useState(() => {
     try {
@@ -55,6 +57,8 @@ function useTheme() {
   const toggle = () => setTheme((t) => (t === "dark" ? "light" : "dark"))
   return { theme, toggle }
 }
+
+/* ---------- connection status ---------- */
 
 const STATUS = {
   online: { label: "Connected", dot: "bg-emerald-500", ping: true },
@@ -82,6 +86,8 @@ function ConnectionStatus({ status }) {
     </Badge>
   )
 }
+
+/* ---------- picker: plain label for one option, dropdown for several ---------- */
 
 function Picker({ id, value, onChange, options, placeholder, disabled, format = (v) => v }) {
   if (options.length <= 1) {
@@ -131,13 +137,14 @@ export default function App() {
   locoRef.current = selectedLoco
   const estop = !!liveState.estop
 
-  const releaseTimer = useRef(null)   
+  const releaseTimer = useRef(null)   // releases syncLock after the user stops dragging
   const syncLock = useRef(false)
-  const desiredSpeed = useRef(0)     
-  const pendingSend = useRef(false)   
-  const inFlight = useRef(false)      
+  const desiredSpeed = useRef(0)      // what the slider wants right now
+  const pendingSend = useRef(false)   // "there is a newer value that has not been sent"
+  const inFlight = useRef(false)      // only ONE speed request at a time
   const lastSendAt = useRef(0)
 
+  // Load which locomotives and switches this panel may control
   useEffect(() => {
     fetch("/api/allowed")
       .then((res) => res.json())
@@ -152,6 +159,7 @@ export default function App() {
       .catch((err) => console.error("Config fetch error:", err))
   }, [])
 
+  // Poll live state every second
   useEffect(() => {
     const interval = setInterval(() => {
       fetch("/api/state")
@@ -174,6 +182,8 @@ export default function App() {
 
   useEffect(() => () => clearTimeout(releaseTimer.current), [])
 
+  // Offline = the API stopped answering twice in a row, or the backend
+  // reports that it lost Rocrail (state.status === "offline")
   const status =
     failures >= 2 || liveState.status === "offline"
       ? "offline"
@@ -187,12 +197,17 @@ export default function App() {
     direction: "forward",
   }
 
+  // Follow the server's speed unless the user is mid-drag
+  // Follow the server's speed unless the user is mid-drag or the difference is just a rounding error
   useEffect(() => {
     if (activeLoco.speed !== undefined && !syncLock.current) {
       setLocalSpeed((prevSpeed) => {
+        // If the server speed is within 2% of our slider, it's just Rocrail rounding.
+        // Keep the slider where the user left it to prevent visual jumping.
         if (Math.abs(activeLoco.speed - prevSpeed) <= 2) {
           return prevSpeed
         }
+        // Otherwise, a real change happened (e.g., an Emergency Stop), so update the slider.
         return activeLoco.speed
       })
     }
@@ -296,14 +311,14 @@ export default function App() {
     <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
       <header className="border-b">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-6">
+        <div className="relative mx-auto flex h-16 max-w-4xl items-center justify-between px-6">
           <div className="flex items-center gap-4">
             <ConnectionStatus status={status} />
             <Separator orientation="vertical" className="hidden h-5 sm:block" />
-            <h1 className="hidden text-lg font-semibold tracking-tight sm:block">
-              Rail Exhibit Control
-            </h1>
           </div>
+          <h1 className="absolute left-1/2 hidden -translate-x-1/2 text-lg font-semibold tracking-tight sm:block">
+            Rail Exhibit Control
+          </h1>
           <Button
             variant="outline"
             size="icon"
@@ -343,15 +358,16 @@ export default function App() {
 
         {/* Emergency stop */}
         <Button
+          variant="destructive"
           onClick={emergencyStop}
-          className="h-14 w-full gap-2.5 rounded-xl border border-red-900 bg-red-600 text-lg font-bold text-white shadow-[0_4px_0_0_#7f1d1d] transition-[transform,box-shadow] hover:bg-red-700 active:translate-y-1 active:shadow-none dark:border-red-950 dark:bg-red-600 dark:hover:bg-red-700"
+          className="h-14 w-full gap-2.5 text-lg font-bold"
         >
           <AlertTriangle className="h-5 w-5" />
           Emergency stop all trains
         </Button>
 
         <div
-          className={`grid grid-cols-1 gap-6 transition-opacity md:grid-cols-2 ${offline ? "opacity-60" : ""}`}
+          className={`flex flex-col gap-6 transition-opacity ${offline ? "opacity-60" : ""}`}
         >
           {/* Train control */}
           <Card className="flex flex-col border bg-card text-card-foreground shadow-sm">
@@ -361,7 +377,7 @@ export default function App() {
                 Train control
               </CardTitle>
               <CardDescription>
-                Set speed and direction for the selected locomotive.
+                Set the speed, direction, and lights for the selected train.
               </CardDescription>
             </CardHeader>
 
@@ -380,10 +396,11 @@ export default function App() {
 
               <Separator />
 
-              <div className="flex flex-1 items-stretch gap-8">
-                {/* Vertical throttle */}
-                <div className="flex flex-col items-center gap-3">
-                  <Label htmlFor="throttle">Throttle</Label>
+              {/* Centered control console with bounded width */}
+              <div className="flex flex-1 justify-center gap-12 py-4 sm:gap-24">
+                {/* Vertical throttle - fixed narrow column */}
+                <div className="flex w-16 flex-col items-center gap-4">
+                  <Label htmlFor="throttle" className="text-muted-foreground">Throttle</Label>
                   <div className="flex h-64 justify-center">
                     <Slider
                       id="throttle"
@@ -399,40 +416,45 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Readout + direction */}
-                <div className="flex flex-1 flex-col justify-between gap-6">
+                {/* Readout + buttons - max width prevents extreme stretching */}
+                <div className="flex w-full max-w-xs flex-col justify-center gap-8">
+                  {/* Speed Readout */}
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Speed</p>
-                    <p className="font-mono text-6xl font-semibold tabular-nums leading-none">
+                    <p className="font-mono text-7xl font-semibold tabular-nums leading-none">
                       {localSpeed}
-                      <span className="ml-1 text-2xl text-muted-foreground">
+                      <span className="ml-2 text-3xl text-muted-foreground">
                         %
                       </span>
                     </p>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>Direction</Label>
-                    <div className="flex w-full gap-2">
-                      {[
-                        { dir: "reverse", label: "Reverse", Icon: ArrowLeft },
-                        { dir: "forward", label: "Forward", Icon: ArrowRight },
-                      ].map(({ dir, label, Icon }) => (
-                        <Button
-                          key={dir}
-                          variant={activeLoco.direction === dir ? "default" : "outline"}
-                          className="flex-1 gap-1.5"
-                          aria-pressed={activeLoco.direction === dir}
-                          disabled={!selectedLoco || offline}
-                          onClick={() => setDirection(dir)}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {label}
-                        </Button>
-                      ))}
+                  {/* Buttons Group */}
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <Label className="text-muted-foreground">Direction</Label>
+                      <div className="flex w-full gap-2">
+                        {[
+                          { dir: "reverse", label: "Reverse", Icon: ArrowLeft },
+                          { dir: "forward", label: "Forward", Icon: ArrowRight },
+                        ].map(({ dir, label, Icon }) => (
+                          <Button
+                            key={dir}
+                            variant={activeLoco.direction === dir ? "default" : "outline"}
+                            className="flex-1 gap-1.5"
+                            aria-pressed={activeLoco.direction === dir}
+                            disabled={!selectedLoco || offline}
+                            onClick={() => setDirection(dir)}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {label}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
-                      <div className="space-y-2 mt-4">
-                      <Label>Headlights</Label>
+
+                    <div className="space-y-3">
+                      <Label className="text-muted-foreground">Headlights</Label>
                       <Button
                         variant={lightOn ? "default" : "outline"}
                         className="w-full gap-2"
@@ -440,9 +462,9 @@ export default function App() {
                         onClick={toggleLight}
                       >
                         <Lightbulb className="h-4 w-4" />
-                        {lightOn ? "Lights On" : "Lights Off"}
+                        {lightOn ? "Turn Lights Off" : "Turn Lights On"}
                       </Button>
-                  </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -469,7 +491,7 @@ export default function App() {
                 Track routing
               </CardTitle>
               <CardDescription>
-                Move the physical switches on the exhibit table.
+                Control the switches in Rocrail.
               </CardDescription>
             </CardHeader>
 
@@ -485,14 +507,6 @@ export default function App() {
                   disabled={offline}
                   format={(id) => `Switch: ${id}`}
                 />
-              </div>
-
-              <div className="rounded-lg border bg-muted/50 p-4 text-sm text-muted-foreground">
-                <p className="mb-1 font-medium text-foreground">
-                  Watch the physical table.
-                </p>
-                The rails move as soon as you press the button below, changing
-                the path of any train on the track.
               </div>
             </CardContent>
 
