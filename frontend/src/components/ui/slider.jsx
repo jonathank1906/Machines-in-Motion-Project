@@ -27,7 +27,7 @@ const Slider = React.forwardRef(
             className={cn("absolute bg-primary", vertical ? "w-full" : "h-full")}
           />
         </SliderPrimitive.Track>
-        <SliderPrimitive.Thumb className="block h-6 w-6 rounded-full border-2 border-primary bg-background shadow transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none" />
+        <SliderPrimitive.Thumb className="block h-6 w-20 rounded-[4px] border-2 border-primary bg-background ring-offset-background transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50" />
       </SliderPrimitive.Root>
     )
   }

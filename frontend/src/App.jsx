@@ -360,9 +360,8 @@ export default function App() {
         <Button
           variant="destructive"
           onClick={emergencyStop}
-          className="h-14 w-full gap-2.5 text-lg font-bold"
+          className="h-14 w-full gap-2.5 bg-red-700 text-lg font-bold text-white hover:bg-red-800 dark:bg-red-900 dark:hover:bg-red-950"
         >
-          <AlertTriangle className="h-5 w-5" />
           Emergency stop all trains
         </Button>
 
@@ -470,15 +469,14 @@ export default function App() {
               </div>
             </CardContent>
 
-            <CardFooter>
+            <CardFooter className="border-0 bg-red-700 p-0 dark:bg-red-900">
               <Button
-                variant="secondary"
-                className="w-full gap-2"
+                variant="destructive"
+                className="h-14 w-full rounded-none border-0 gap-2 bg-transparent text-lg font-bold text-white hover:bg-red-800 dark:hover:bg-red-950"
                 onClick={stopLoco}
                 disabled={!selectedLoco || offline}
               >
-                <OctagonX className="h-4 w-4" />
-                Halt train
+                {selectedLoco ? `Stop train ${selectedLoco}` : "Stop train"}
               </Button>
             </CardFooter>
           </Card>
