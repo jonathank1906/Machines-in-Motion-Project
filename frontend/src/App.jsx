@@ -34,6 +34,7 @@ import {
   WifiOff,
   Lightbulb,
 } from "lucide-react"
+import tracks from "@/assets/tracks.svg"
 
 function useTheme() {
   const [theme, setTheme] = useState(() => {
@@ -342,7 +343,7 @@ export default function App() {
 
   return (
     <div className={theme === "dark" ? "dark" : ""}>
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="border-b">
         <div className="relative mx-auto flex h-16 max-w-4xl items-center justify-between px-6">
           <div className="flex items-center gap-4">
@@ -350,7 +351,7 @@ export default function App() {
             <Separator orientation="vertical" className="hidden h-5 sm:block" />
           </div>
           <h1 className="absolute left-1/2 hidden -translate-x-1/2 text-lg font-semibold tracking-tight sm:block">
-            Rail Exhibit Control
+            Lego Rail Exhibit Control
           </h1>
           <Button
             variant="outline"
@@ -376,7 +377,7 @@ export default function App() {
         onSelect={setSelectedLoco}
       />
 
-      <main className="mx-auto max-w-4xl space-y-6 p-6">
+      <main className="mx-auto w-full max-w-4xl flex-1 space-y-6 p-6">
         {offline && (
           <Alert variant="destructive">
             <WifiOff />
@@ -582,6 +583,16 @@ export default function App() {
           </Card>
         </div>
       </main>
+      <footer className="flex h-16 w-full overflow-hidden opacity-20" aria-label="Track decoration">
+        {Array.from({ length: 12 }, (_, index) => (
+          <img
+            key={index}
+            src={tracks}
+            alt=""
+            className={`h-full w-auto shrink-0 ${index > 0 ? "-ml-[2px]" : ""}`}
+          />
+        ))}
+      </footer>
     </div>
     </div>
   )
