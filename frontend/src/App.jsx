@@ -86,7 +86,7 @@ function LocoThumbnail({ locoId, imageName, roadname }) {
     <img
       src={src}
       alt={roadname || locoId}
-      className="h-20 w-32 rounded-md border object-contain"
+      className="h-20 w-32 object-contain"
       onError={() => setImageFailed(true)}
     />
   )
@@ -456,9 +456,8 @@ export default function App() {
                   Train control
                 </span>
                 <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
+                  size="lg"
+                  className="gap-2 px-5"
                   onClick={() => setDrawerOpen(true)}
                   aria-expanded={drawerOpen}
                   aria-controls="train-fleet-drawer"
@@ -492,7 +491,18 @@ export default function App() {
               <div className="flex flex-1 justify-center gap-12 py-4 sm:gap-24">
                 <div className="flex w-16 flex-col items-center gap-4">
                   <Label htmlFor="throttle" className="text-muted-foreground">Throttle</Label>
-                  <div className="flex h-64 justify-center">
+                  <div className="flex h-64 items-stretch justify-center gap-3">
+                    <div
+                      aria-hidden="true"
+                      className="flex h-full flex-col justify-between py-1 text-xs text-muted-foreground"
+                    >
+                      {[60, 50, 40, 30, 20, 10, 0].map((speed) => (
+                        <div key={speed} className="flex items-center gap-1">
+                          <span className="w-5 text-right">{speed}</span>
+                          <span className="h-px w-3 bg-muted-foreground/60" />
+                        </div>
+                      ))}
+                    </div>
                     <Slider
                       id="throttle"
                       orientation="vertical"
