@@ -546,7 +546,7 @@ export default function App() {
                 <Split className="h-5 w-5" />
                 Track routing
               </CardTitle>
-              <CardDescription className="text-xs">
+              <CardDescription className="translate-y-1 text-xs">
                 Control the switches in Rocrail.
               </CardDescription>
             </CardHeader>
