@@ -54,7 +54,20 @@ class RocrailAdapter(CommandsMixin):
         if not loc_id:
             return
         loco = self.state["locomotives"].setdefault(
-            loc_id, {"speed": 0, "direction": "forward", "block": "", "dest": "", "mode": "stop"})
+            loc_id, {
+                "speed": 0,
+                "direction": "forward",
+                "block": "",
+                "dest": "",
+                "mode": "stop",
+                "image": "",
+                "roadname": "",
+                "desc": "",
+            })
+
+        for key in ("image", "roadname", "desc"):
+            if key in attrs:
+                loco[key] = attrs[key]
 
         if attrs.get("cmd") in (None, "", "velocity"):
             v = attrs.get("V")

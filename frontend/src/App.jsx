@@ -14,6 +14,13 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Slider } from "@/components/ui/slider"
 import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer"
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -24,6 +31,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  Menu,
   Moon,
   OctagonX,
   Sun,
@@ -60,6 +68,88 @@ const STATUS = {
   online: { label: "Connected", dot: "bg-emerald-500", ping: true },
   connecting: { label: "Connecting", dot: "bg-amber-500", ping: true },
   offline: { label: "Offline", dot: "bg-red-500", ping: false },
+}
+
+function LocoThumbnail({ locoId, imageName, roadname }) {
+  const src = imageName
+    ? `/rocrail-images/${imageName}`
+    : `/rocrail-images/${locoId.toLowerCase()}.png`
+  const [imageFailed, setImageFailed] = useState(false)
+
+  useEffect(() => {
+    setImageFailed(false)
+  }, [src])
+
+  if (imageFailed) return null
+
+  return (
+    <img
+      src={src}
+      alt={roadname || locoId}
+      className="h-20 w-32 rounded-md border object-contain"
+      onError={() => setImageFailed(true)}
+    />
+  )
+}
+
+function LocoDrawer({ open, onClose, locos, liveState, selectedLoco, onSelect }) {
+  return (
+    <Drawer
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose()
+      }}
+      swipeDirection="right"
+    >
+      <DrawerContent
+        id="train-fleet-drawer"
+        aria-label="Train fleet"
+        className="w-full max-w-sm p-6"
+      >
+        <DrawerHeader className="p-0">
+          <DrawerTitle>Train fleet</DrawerTitle>
+          <DrawerDescription>Select a train to control.</DrawerDescription>
+        </DrawerHeader>
+
+        <div className="mt-6 flex flex-col gap-3 overflow-y-auto">
+          {locos.map((locoId) => {
+            const loco = liveState.locomotives?.[locoId] || {}
+            const selected = locoId === selectedLoco
+            return (
+              <button
+                type="button"
+                key={locoId}
+                className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
+                  selected ? "border-primary bg-primary/10" : "hover:bg-muted"
+                }`}
+                onClick={() => {
+                  onSelect(locoId)
+                  onClose()
+                }}
+              >
+                <LocoThumbnail
+                  locoId={locoId}
+                  imageName={loco.image}
+                  roadname={loco.roadname}
+                />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">
+                    {loco.roadname || locoId}
+                  </span>
+                  <span className="block truncate text-sm text-muted-foreground">
+                    {loco.desc || locoId}
+                  </span>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {loco.speed ?? 0}% · {loco.direction || "forward"}
+                  </span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </DrawerContent>
+    </Drawer>
+  )
 }
 
 function ConnectionStatus({ status }) {
@@ -121,6 +211,7 @@ export default function App() {
   const [allowed, setAllowed] = useState({ locos: [], switches: [] })
   const [selectedLoco, setSelectedLoco] = useState("")
   const [selectedSwitch, setSelectedSwitch] = useState("")
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [localSpeed, setLocalSpeed] = useState(0)
   const [lightOn, setLightOn] = useState(false)
   const [failures, setFailures] = useState(0)
@@ -316,6 +407,15 @@ export default function App() {
         </div>
       </header>
 
+      <LocoDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        locos={allowed.locos}
+        liveState={liveState}
+        selectedLoco={selectedLoco}
+        onSelect={setSelectedLoco}
+      />
+
       <main className="mx-auto max-w-4xl space-y-6 p-6">
         {offline && (
           <Alert variant="destructive">
@@ -350,30 +450,45 @@ export default function App() {
         >
           <Card className="flex flex-col border bg-card text-card-foreground shadow-sm">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Train className="h-5 w-5" />
-                Train control
+              <CardTitle className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <Train className="h-5 w-5" />
+                  Train control
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setDrawerOpen(true)}
+                  aria-expanded={drawerOpen}
+                  aria-controls="train-fleet-drawer"
+                >
+                  Trains
+                </Button>
               </CardTitle>
               <CardDescription>
                 Set the speed, direction, and lights for the selected train.
               </CardDescription>
+              {selectedLoco && (
+                <div className="flex flex-col items-center gap-3 pt-2 text-center">
+                  <LocoThumbnail
+                    locoId={selectedLoco}
+                    imageName={activeLoco.image}
+                    roadname={activeLoco.roadname}
+                  />
+                  <div className="text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">
+                      {activeLoco.roadname
+                        ? `${activeLoco.roadname} - ${selectedLoco}`
+                        : selectedLoco}
+                    </p>
+                    {activeLoco.desc && <p>{activeLoco.desc}</p>}
+                  </div>
+                </div>
+              )}
             </CardHeader>
 
             <CardContent className="flex flex-1 flex-col gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="loco-select">Active train</Label>
-                <Picker
-                  id="loco-select"
-                  value={selectedLoco}
-                  onChange={setSelectedLoco}
-                  options={allowed.locos}
-                  placeholder="Select a train…"
-                  disabled={offline}
-                />
-              </div>
-
-              <Separator />
-
               <div className="flex flex-1 justify-center gap-12 py-4 sm:gap-24">
                 <div className="flex w-16 flex-col items-center gap-4">
                   <Label htmlFor="throttle" className="text-muted-foreground">Throttle</Label>

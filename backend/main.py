@@ -39,6 +39,17 @@ app = FastAPI(lifespan=lifespan)
 frontend_path = os.path.join(os.path.dirname(__file__), '..', 'frontend')
 app.mount("/static", StaticFiles(directory=frontend_path), name="static")
 
+rocrail_images_path = os.environ.get(
+    "ROCRAIL_IMAGES_PATH",
+    r"C:\Users\jonat\Downloads\Rocrail-Windows-WIN64\images",
+)
+if os.path.exists(rocrail_images_path):
+    app.mount(
+        "/rocrail-images",
+        StaticFiles(directory=rocrail_images_path),
+        name="rocrail_images",
+    )
+
 
 @app.get("/")
 async def serve_index():
