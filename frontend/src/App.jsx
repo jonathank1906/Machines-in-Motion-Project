@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Slider } from "@/components/ui/slider"
+import { Switch } from "@/components/ui/switch"
 import {
   Drawer,
   DrawerContent,
@@ -20,13 +21,6 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   AlertTriangle,
   ArrowLeft,
@@ -173,44 +167,12 @@ function ConnectionStatus({ status }) {
   )
 }
 
-function Picker({ id, value, onChange, options, placeholder, disabled, format = (v) => v }) {
-  if (options.length <= 1) {
-    return (
-      <div
-        id={id}
-        className={`flex h-9 w-full items-center rounded-md border bg-muted/50 px-3 text-sm ${disabled ? "opacity-50" : ""}`}
-      >
-        {options.length ? (
-          format(options[0])
-        ) : (
-          <span className="text-muted-foreground">None available</span>
-        )}
-      </div>
-    )
-  }
-  return (
-    <Select value={value} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger id={id} className="w-full">
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((opt) => (
-          <SelectItem key={opt} value={opt}>
-            {format(opt)}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
-}
-
 export default function App() {
   const { theme, toggle } = useTheme()
 
   const [liveState, setLiveState] = useState({ locomotives: {}, switches: {} })
   const [allowed, setAllowed] = useState({ locos: [], switches: [] })
   const [selectedLoco, setSelectedLoco] = useState("")
-  const [selectedSwitch, setSelectedSwitch] = useState("")
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [localSpeed, setLocalSpeed] = useState(0)
   const [lightOn, setLightOn] = useState(false)
@@ -236,7 +198,6 @@ export default function App() {
           switches: data.switches ?? [],
         })
         if (data.locos?.length > 0) setSelectedLoco(data.locos[0])
-        if (data.switches?.length > 0) setSelectedSwitch(data.switches[0])
       })
       .catch((err) => console.error("Config fetch error:", err))
   }, [])
@@ -375,9 +336,8 @@ export default function App() {
 
   const resetEstop = () => post("/api/estop/reset")
 
-  const flipSwitch = () => {
-    if (!selectedSwitch) return
-    post(`/api/switch/${selectedSwitch}/flip`)
+  const setSwitchPosition = (switchId, turnout) => {
+    post(`/api/switch/${switchId}/${turnout ? "turnout" : "straight"}`)
   }
 
   return (
@@ -446,9 +406,9 @@ export default function App() {
         </Button>
 
         <div
-          className={`flex flex-col gap-6 transition-opacity ${offline ? "opacity-60" : ""}`}
+          className={`grid grid-cols-1 gap-6 transition-opacity md:grid-cols-[12rem_minmax(0,1fr)] ${offline ? "opacity-60" : ""}`}
         >
-          <Card className="flex flex-col border bg-card text-card-foreground shadow-sm">
+          <Card className="order-1 flex flex-col border bg-card text-card-foreground shadow-sm md:order-2">
             <CardHeader>
               <CardTitle className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2">
@@ -465,7 +425,7 @@ export default function App() {
                   Trains
                 </Button>
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs">
                 Set the speed, direction, and lights for the selected train.
               </CardDescription>
               {selectedLoco && (
@@ -580,41 +540,45 @@ export default function App() {
             </CardFooter>
           </Card>
 
-          <Card className="flex flex-col border bg-card text-card-foreground shadow-sm">
-            <CardHeader>
+          <Card className="order-2 flex flex-col border bg-card text-card-foreground shadow-sm md:order-1">
+            <CardHeader className="translate-y-2">
               <CardTitle className="flex items-center gap-2">
                 <Split className="h-5 w-5" />
                 Track routing
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs">
                 Control the switches in Rocrail.
               </CardDescription>
             </CardHeader>
 
-            <CardContent className="flex flex-1 flex-col gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="switch-select">Target switch</Label>
-                <Picker
-                  id="switch-select"
-                  value={selectedSwitch}
-                  onChange={setSelectedSwitch}
-                  options={allowed.switches}
-                  placeholder="Select a switch…"
-                  disabled={offline}
-                  format={(id) => `Switch: ${id}`}
-                />
+            <CardContent className="flex flex-1 flex-col p-4">
+              <div className="flex flex-col gap-4">
+                {[...allowed.switches]
+                  .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+                  .map((switchId) => {
+                  const switchState = liveState.switches?.[switchId]?.state
+                  const turnout = switchState === "turnout"
+                  const switchLabel = `switch-${switchId}`
+                  return (
+                    <div key={switchId} className="flex items-center justify-between gap-2">
+                      <Label htmlFor={switchLabel} className="truncate text-sm">
+                        {switchId}
+                      </Label>
+                      <Switch
+                        id={switchLabel}
+                        checked={turnout}
+                        onCheckedChange={(checked) => setSwitchPosition(switchId, checked)}
+                        disabled={offline}
+                        aria-label={`Set switch ${switchId} to ${turnout ? "straight" : "turnout"}`}
+                      />
+                    </div>
+                  )
+                })}
+                {!allowed.switches.length && (
+                  <p className="text-sm text-muted-foreground">No switches available.</p>
+                )}
               </div>
             </CardContent>
-
-            <CardFooter>
-              <Button
-                className="w-full"
-                onClick={flipSwitch}
-                disabled={!selectedSwitch || offline}
-              >
-                Flip switch
-              </Button>
-            </CardFooter>
           </Card>
         </div>
       </main>
