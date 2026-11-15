@@ -33,8 +33,6 @@ import {
   Lightbulb,
 } from "lucide-react"
 
-/* ---------- theme ---------- */
-
 function useTheme() {
   const [theme, setTheme] = useState(() => {
     try {
@@ -58,11 +56,9 @@ function useTheme() {
   return { theme, toggle }
 }
 
-/* ---------- connection status ---------- */
-
 const STATUS = {
   online: { label: "Connected", dot: "bg-emerald-500", ping: true },
-  connecting: { label: "Connecting…", dot: "bg-amber-500", ping: true },
+  connecting: { label: "Connecting", dot: "bg-amber-500", ping: true },
   offline: { label: "Offline", dot: "bg-red-500", ping: false },
 }
 
@@ -86,8 +82,6 @@ function ConnectionStatus({ status }) {
     </Badge>
   )
 }
-
-/* ---------- picker: plain label for one option, dropdown for several ---------- */
 
 function Picker({ id, value, onChange, options, placeholder, disabled, format = (v) => v }) {
   if (options.length <= 1) {
@@ -120,8 +114,6 @@ function Picker({ id, value, onChange, options, placeholder, disabled, format = 
   )
 }
 
-/* ---------- app ---------- */
-
 export default function App() {
   const { theme, toggle } = useTheme()
 
@@ -137,14 +129,13 @@ export default function App() {
   locoRef.current = selectedLoco
   const estop = !!liveState.estop
 
-  const releaseTimer = useRef(null)   // releases syncLock after the user stops dragging
+  const releaseTimer = useRef(null)
   const syncLock = useRef(false)
-  const desiredSpeed = useRef(0)      // what the slider wants right now
-  const pendingSend = useRef(false)   // "there is a newer value that has not been sent"
-  const inFlight = useRef(false)      // only ONE speed request at a time
+  const desiredSpeed = useRef(0)
+  const pendingSend = useRef(false)
+  const inFlight = useRef(false)
   const lastSendAt = useRef(0)
 
-  // Load which locomotives and switches this panel may control
   useEffect(() => {
     fetch("/api/allowed")
       .then((res) => res.json())
@@ -159,7 +150,6 @@ export default function App() {
       .catch((err) => console.error("Config fetch error:", err))
   }, [])
 
-  // Poll live state every second
   useEffect(() => {
     const interval = setInterval(() => {
       fetch("/api/state")
@@ -182,8 +172,6 @@ export default function App() {
 
   useEffect(() => () => clearTimeout(releaseTimer.current), [])
 
-  // Offline = the API stopped answering twice in a row, or the backend
-  // reports that it lost Rocrail (state.status === "offline")
   const status =
     failures >= 2 || liveState.status === "offline"
       ? "offline"
@@ -197,17 +185,12 @@ export default function App() {
     direction: "forward",
   }
 
-  // Follow the server's speed unless the user is mid-drag
-  // Follow the server's speed unless the user is mid-drag or the difference is just a rounding error
   useEffect(() => {
     if (activeLoco.speed !== undefined && !syncLock.current) {
       setLocalSpeed((prevSpeed) => {
-        // If the server speed is within 2% of our slider, it's just Rocrail rounding.
-        // Keep the slider where the user left it to prevent visual jumping.
         if (Math.abs(activeLoco.speed - prevSpeed) <= 2) {
           return prevSpeed
         }
-        // Otherwise, a real change happened (e.g., an Emergency Stop), so update the slider.
         return activeLoco.speed
       })
     }
@@ -309,7 +292,6 @@ export default function App() {
   return (
     <div className={theme === "dark" ? "dark" : ""}>
     <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
       <header className="border-b">
         <div className="relative mx-auto flex h-16 max-w-4xl items-center justify-between px-6">
           <div className="flex items-center gap-4">
@@ -340,8 +322,7 @@ export default function App() {
             <WifiOff />
             <AlertTitle>Connection lost</AlertTitle>
             <AlertDescription>
-              Train and switch controls are paused until the connection
-              returns.
+              Train controls are not available.
             </AlertDescription>
           </Alert>
         )}
@@ -356,7 +337,6 @@ export default function App() {
           </Alert>
         )}
 
-        {/* Emergency stop */}
         <Button
           variant="destructive"
           onClick={emergencyStop}
@@ -368,7 +348,6 @@ export default function App() {
         <div
           className={`flex flex-col gap-6 transition-opacity ${offline ? "opacity-60" : ""}`}
         >
-          {/* Train control */}
           <Card className="flex flex-col border bg-card text-card-foreground shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -395,9 +374,7 @@ export default function App() {
 
               <Separator />
 
-              {/* Centered control console with bounded width */}
               <div className="flex flex-1 justify-center gap-12 py-4 sm:gap-24">
-                {/* Vertical throttle - fixed narrow column */}
                 <div className="flex w-16 flex-col items-center gap-4">
                   <Label htmlFor="throttle" className="text-muted-foreground">Throttle</Label>
                   <div className="flex h-64 justify-center">
@@ -415,9 +392,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Readout + buttons - max width prevents extreme stretching */}
                 <div className="flex w-full max-w-xs flex-col justify-center gap-8">
-                  {/* Speed Readout */}
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Speed</p>
                     <p className="font-mono text-7xl font-semibold tabular-nums leading-none">
@@ -428,7 +403,6 @@ export default function App() {
                     </p>
                   </div>
 
-                  {/* Buttons Group */}
                   <div className="space-y-6">
                     <div className="space-y-3">
                       <Label className="text-muted-foreground">Direction</Label>
@@ -481,7 +455,6 @@ export default function App() {
             </CardFooter>
           </Card>
 
-          {/* Track routing */}
           <Card className="flex flex-col border bg-card text-card-foreground shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

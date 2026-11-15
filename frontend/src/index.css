@@ -73,8 +73,6 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
-/* This is the missing piece: it turns the variables above into
-   Tailwind classes like bg-card, text-muted-foreground, border-border */
 @theme inline {
   --font-sans: 'Geist Variable', sans-serif;
   --font-heading: var(--font-sans);
