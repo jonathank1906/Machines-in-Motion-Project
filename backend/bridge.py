@@ -14,8 +14,6 @@ BROKER_HOST = "localhost"
 BROKER_PORT = 1883
 COMMAND_TOPIC = "rocrail/service/command"
 
-# Map Rocrail's Decoder Address (addr) OR Locomotive ID (id) to each physical LEGO Hub
-# You can match by addr ("1", "2", "3") or by Rocrail ID ("60337", "snow", "cargo")
 TRAIN_CONFIGS = [
     {
         "name": "60337",
