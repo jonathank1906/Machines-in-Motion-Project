@@ -176,7 +176,8 @@ export default function App() {
   const [selectedLoco, setSelectedLoco] = useState("")
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [localSpeed, setLocalSpeed] = useState(0)
-  const [lightOn, setLightOn] = useState(false)
+  const [lightsState, setLightsState] = useState({})
+  const lightOn = lightsState[selectedLoco] || false
   const [failures, setFailures] = useState(0)
   const [hasConnected, setHasConnected] = useState(false)
   const locoRef = useRef("")
@@ -242,12 +243,11 @@ export default function App() {
     clearTimeout(releaseTimer.current)
     syncLock.current = false
     pendingSend.current = false
-    const targetSpeed = liveState.locomotives?.[selectedLoco]?.speed ?? 0
-    const targetLight = liveState.locomotives?.[selectedLoco]?.light_on ?? false
+    const locoData = liveState.locomotives?.[selectedLoco] || {}
+    const targetSpeed = locoData.speed ?? 0
     desiredSpeed.current = targetSpeed
     setLocalSpeed(targetSpeed)
-    setLightOn(targetLight)
-  }, [selectedLoco])
+  }, [selectedLoco, liveState.locomotives])
 
   useEffect(() => {
     if (activeLoco.speed !== undefined && !syncLock.current) {
@@ -326,7 +326,7 @@ export default function App() {
   const toggleLight = () => {
     if (!selectedLoco || offline) return
     const newState = !lightOn
-    setLightOn(newState)
+    setLightsState((prev) => ({ ...prev, [selectedLoco]: newState }))
     whenIdle(() => post(`/api/loco/${selectedLoco}/light/${newState}`))
   }
 
