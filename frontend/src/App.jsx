@@ -327,7 +327,14 @@ export default function App() {
     pendingSend.current = true
     pumpSpeed()
     clearTimeout(releaseTimer.current)
-    releaseTimer.current = setTimeout(() => { syncLock.current = false }, 1200)
+  }
+
+  const handleSpeedCommit = () => {
+    if (isSelectedOffline || offline || estop) return
+    clearTimeout(releaseTimer.current)
+    releaseTimer.current = setTimeout(() => {
+      syncLock.current = false
+    }, 1500)
   }
 
   const whenIdle = async (fn) => {
@@ -351,10 +358,15 @@ export default function App() {
 
   const stopLoco = () => {
     if (!selectedLoco || isSelectedOffline || offline) return
+    syncLock.current = true
+    clearTimeout(releaseTimer.current)
     setLocalSpeed(0)
     desiredSpeed.current = 0
     pendingSend.current = true
     pumpSpeed()
+    releaseTimer.current = setTimeout(() => {
+      syncLock.current = false
+    }, 1500)
   }
 
   const emergencyStop = () => {
@@ -512,6 +524,7 @@ export default function App() {
                       max={60}
                       step={1}
                       onValueChange={handleSpeedChange}
+                      onValueCommit={handleSpeedCommit}
                       disabled={!selectedLoco || isSelectedOffline || offline || estop}
                       className="h-full"
                       aria-label="Throttle"
