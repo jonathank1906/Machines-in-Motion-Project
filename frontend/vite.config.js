@@ -17,7 +17,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:8000',
-      '/theme': 'http://localhost:8000'
+      '/theme': 'http://localhost:8000',
+      '/rocrail-images': 'http://localhost:8000'
     }
   }
 })
