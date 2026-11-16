@@ -239,15 +239,27 @@ export default function App() {
   }
 
   useEffect(() => {
+    clearTimeout(releaseTimer.current)
+    syncLock.current = false
+    pendingSend.current = false
+    const targetSpeed = liveState.locomotives?.[selectedLoco]?.speed ?? 0
+    const targetLight = liveState.locomotives?.[selectedLoco]?.light_on ?? false
+    desiredSpeed.current = targetSpeed
+    setLocalSpeed(targetSpeed)
+    setLightOn(targetLight)
+  }, [selectedLoco])
+
+  useEffect(() => {
     if (activeLoco.speed !== undefined && !syncLock.current) {
       setLocalSpeed((prevSpeed) => {
+        if (activeLoco.speed === 0) return 0
         if (Math.abs(activeLoco.speed - prevSpeed) <= 2) {
           return prevSpeed
         }
         return activeLoco.speed
       })
     }
-  }, [activeLoco.speed, selectedLoco])
+  }, [activeLoco.speed])
 
   const post = (path) =>
     fetch(path, { method: "POST" }).catch((err) => {
