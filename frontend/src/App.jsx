@@ -34,7 +34,8 @@ import {
   WifiOff,
   Lightbulb,
 } from "lucide-react"
-import tracks from "@/assets/tracks.svg"
+import darkModeTracks from "@/assets/Dark Mode Train Tracks.svg"
+import lightModeTracks from "@/assets/Light Mode Train Tracks.svg"
 
 function useTheme() {
   const [theme, setTheme] = useState(() => {
@@ -170,6 +171,7 @@ function ConnectionStatus({ status }) {
 
 export default function App() {
   const { theme, toggle } = useTheme()
+  const tracks = theme === "dark" ? darkModeTracks : lightModeTracks
 
   const [liveState, setLiveState] = useState({ locomotives: {}, switches: {} })
   const [allowed, setAllowed] = useState({ locos: [], switches: [] })
