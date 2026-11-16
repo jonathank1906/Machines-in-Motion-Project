@@ -251,6 +251,7 @@ export default function App() {
     speed: 0,
     direction: "forward",
   }
+  const isSelectedOffline = activeLoco.status === "offline"
 
   useEffect(() => {
     clearTimeout(releaseTimer.current)
@@ -281,6 +282,10 @@ export default function App() {
     })
 
   const pumpSpeed = async () => {
+    if (isSelectedOffline || offline || estop) {
+      pendingSend.current = false
+      return
+    }
     if (inFlight.current) return
     inFlight.current = true
     const retrySoon = () => {
@@ -315,6 +320,7 @@ export default function App() {
   }
 
   const handleSpeedChange = ([speed]) => {
+    if (isSelectedOffline || offline || estop) return
     setLocalSpeed(speed)
     syncLock.current = true
     desiredSpeed.current = speed
@@ -330,21 +336,21 @@ export default function App() {
   }
 
   const setDirection = (dir) => {
-    if (!selectedLoco || !dir) return
+    if (!selectedLoco || !dir || isSelectedOffline || offline) return
     pendingSend.current = false
     desiredSpeed.current = 0
     whenIdle(() => post(`/api/loco/${selectedLoco}/direction/${dir}`))
   }
 
   const toggleLight = () => {
-    if (!selectedLoco || offline) return
+    if (!selectedLoco || isSelectedOffline || offline) return
     const newState = !lightOn
     setLightsState((prev) => ({ ...prev, [selectedLoco]: newState }))
     whenIdle(() => post(`/api/loco/${selectedLoco}/light/${newState}`))
   }
 
   const stopLoco = () => {
-    if (!selectedLoco) return
+    if (!selectedLoco || isSelectedOffline || offline) return
     setLocalSpeed(0)
     desiredSpeed.current = 0
     pendingSend.current = true
@@ -434,8 +440,14 @@ export default function App() {
         <div
           className={`grid grid-cols-1 gap-6 transition-opacity md:grid-cols-[12rem_minmax(0,1fr)] ${offline ? "opacity-60" : ""}`}
         >
-          <Card className="order-1 flex flex-col border bg-card text-card-foreground shadow-sm md:order-2">
-            <CardHeader>
+          <Card className="relative order-1 flex flex-col overflow-hidden border bg-card text-card-foreground shadow-sm md:order-2">
+            {isSelectedOffline && (
+              <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-2 border-b border-red-600/20 bg-red-600/10 px-4 py-2.5 text-xs font-medium text-red-600">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-red-600" />
+                Train {selectedLoco} is currently offline.
+              </div>
+            )}
+            <CardHeader className={isSelectedOffline ? "pt-14" : undefined}>
               <CardTitle className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2">
                   <Train className="h-5 w-5" />
@@ -473,7 +485,11 @@ export default function App() {
               )}
             </CardHeader>
 
-            <CardContent className="flex flex-1 flex-col gap-6">
+            <CardContent
+              className={`flex flex-1 flex-col gap-6 transition-opacity ${
+                isSelectedOffline ? "pointer-events-none opacity-40" : ""
+              }`}
+            >
               <div className="flex flex-1 justify-center gap-12 py-4 sm:gap-24">
                 <div className="flex w-16 flex-col items-center gap-4">
                   <Label htmlFor="throttle" className="text-muted-foreground">Throttle</Label>
@@ -496,7 +512,7 @@ export default function App() {
                       max={60}
                       step={1}
                       onValueChange={handleSpeedChange}
-                      disabled={!selectedLoco || offline || estop}
+                      disabled={!selectedLoco || isSelectedOffline || offline || estop}
                       className="h-full"
                       aria-label="Throttle"
                     />
@@ -527,7 +543,7 @@ export default function App() {
                             variant={activeLoco.direction === dir ? "default" : "outline"}
                             className="flex-1 gap-1.5"
                             aria-pressed={activeLoco.direction === dir}
-                            disabled={!selectedLoco || offline}
+                            disabled={!selectedLoco || isSelectedOffline || offline}
                             onClick={() => setDirection(dir)}
                           >
                             <Icon className="h-4 w-4" />
@@ -542,7 +558,7 @@ export default function App() {
                       <Button
                         variant={lightOn ? "default" : "outline"}
                         className="w-full gap-2"
-                        disabled={!selectedLoco || offline}
+                        disabled={!selectedLoco || isSelectedOffline || offline}
                         onClick={toggleLight}
                       >
                         <Lightbulb className="h-4 w-4" />
@@ -554,12 +570,16 @@ export default function App() {
               </div>
             </CardContent>
 
-            <CardFooter className="border-0 bg-red-700 p-0 dark:bg-red-900">
+            <CardFooter
+              className={`border-0 bg-red-700 p-0 dark:bg-red-900 ${
+                isSelectedOffline ? "pointer-events-none opacity-40" : ""
+              }`}
+            >
               <Button
                 variant="destructive"
                 className="h-14 w-full rounded-none border-0 gap-2 bg-transparent text-lg font-bold text-white hover:bg-red-800 dark:hover:bg-red-950"
                 onClick={stopLoco}
-                disabled={!selectedLoco || offline}
+                disabled={!selectedLoco || isSelectedOffline || offline}
               >
                 {selectedLoco ? `Stop train ${selectedLoco}` : "Stop train"}
               </Button>
