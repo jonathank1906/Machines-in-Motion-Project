@@ -115,8 +115,13 @@ function LocoDrawer({ open, onClose, locos, liveState, selectedLoco, onSelect })
               <button
                 type="button"
                 key={locoId}
+                disabled={loco.status === "offline"}
                 className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
-                  selected ? "border-primary bg-primary/10" : "hover:bg-muted"
+                  loco.status === "offline"
+                    ? "pointer-events-none opacity-40"
+                    : selected
+                      ? "border-primary bg-primary/10"
+                      : "hover:bg-muted"
                 }`}
                 onClick={() => {
                   onSelect(locoId)
@@ -135,8 +140,14 @@ function LocoDrawer({ open, onClose, locos, liveState, selectedLoco, onSelect })
                   <span className="block truncate text-sm text-muted-foreground">
                     {loco.desc || locoId}
                   </span>
-                  <span className="mt-1 block text-xs text-muted-foreground">
-                    {loco.speed ?? 0}% · {loco.direction || "forward"}
+                  <span className={`mt-1 block text-xs ${
+                    loco.status === "offline"
+                      ? "font-medium text-red-500"
+                      : "text-muted-foreground"
+                  }`}>
+                    {loco.status === "offline"
+                      ? "Train offline"
+                      : `${loco.speed ?? 0}% · ${loco.direction || "forward"}`}
                   </span>
                 </span>
               </button>

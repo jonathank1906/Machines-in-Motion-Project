@@ -10,6 +10,7 @@ from backend.commands import EStopActive
 from backend import config
 
 adapter = RocrailAdapter()
+BRIDGE_STATUS = {}
 
 
 async def heartbeat_loop():
@@ -58,7 +59,23 @@ async def serve_index():
 
 @app.get("/api/state")
 async def get_state():
-    return {**adapter.get_state(), "estop": adapter.estop_active}
+    state = adapter.get_state()
+    locomotives = {
+        loco_id: {
+            **loco_data,
+            "status": BRIDGE_STATUS.get(loco_id, "online"),
+        }
+        for loco_id, loco_data in state.get("locomotives", {}).items()
+    }
+    return {**state, "locomotives": locomotives, "estop": adapter.estop_active}
+
+
+@app.post("/api/bridge/status/{loco_id}/{status}")
+def set_bridge_status(loco_id: str, status: str):
+    if status not in ("online", "offline"):
+        raise HTTPException(400, "status must be online or offline")
+    BRIDGE_STATUS[loco_id] = status
+    return {"success": True}
 
 
 @app.get("/api/allowed")

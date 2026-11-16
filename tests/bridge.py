@@ -3,6 +3,7 @@ import csv
 import os
 import sys
 import time
+import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime
 
@@ -50,6 +51,15 @@ STOP_ON_POWER_OFF = False
 LOG_FILE = "latency_log.csv"
 
 HUB_CHAR_UUID = "00001624-1212-efde-1623-785feabcd123"
+
+
+def report_status(loco_id: str, status: str):
+    try:
+        url = f"http://localhost:8000/api/bridge/status/{loco_id}/{status}"
+        request = urllib.request.Request(url, method="POST")
+        urllib.request.urlopen(request, timeout=2)
+    except Exception:
+        pass
 
 
 def speed_to_power(v: float, v_max: float) -> int:
@@ -159,10 +169,19 @@ async def connect_hub(cfg, last_cmds):
     mac = cfg["mac"]
     name = cfg["name"]
     print(f"Scanning/connecting to {name} ({mac})...")
-    client = BleakClient(mac, timeout=8.0)
+
+    def on_disconnected(_client):
+        report_status(name, "offline")
+
+    client = BleakClient(
+        mac,
+        timeout=8.0,
+        disconnected_callback=on_disconnected,
+    )
     try:
         await client.connect()
     except Exception as exc:
+        report_status(name, "offline")
         print(f"   [SKIP] {name} ({mac}) not awake or out of range: {exc}")
         return None, None
 
@@ -186,6 +205,7 @@ async def connect_hub(cfg, last_cmds):
 
     bridge = Bridge(name, write, has_light=cfg["has_light"])
     await bridge.stop_motor()
+    report_status(name, "online")
     print(f"   [OK] {name} ({mac}) connected, motor stopped.")
     return client, bridge
 
@@ -286,6 +306,7 @@ async def main():
         print("Shutting down: stopping all motors...")
         mq.loop_stop()
         for mac, b in bridges.items():
+            report_status(b.name, "offline")
             try:
                 await b.shutdown()
             except Exception as exc:
