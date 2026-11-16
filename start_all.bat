@@ -8,4 +8,4 @@ start "FastAPI Backend" powershell -NoExit -Command ".\venv\Scripts\Activate.ps1
 start "React Frontend" powershell -NoExit -Command "cd frontend; npm run dev"
 
 :: Terminal 3: Python Bridge
-start "Python Bridge" powershell -NoExit -Command "cd tests; py bridge.py"
+start "Python Bridge" powershell -NoExit -Command "cd backend; py bridge.py"
